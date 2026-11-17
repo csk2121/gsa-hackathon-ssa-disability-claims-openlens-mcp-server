@@ -1,0 +1,235 @@
+# SSA Disability Claims OpenLens — Benchmark Questions
+# 
+# Used by eval/phoenix_evals.py and for demonstration purposes.
+# Each entry represents a question that stakeholders (analysts, researchers,
+# advocates, journalists) might ask about SSA disability programs.
+#
+# Fields:
+#   id: Unique identifier
+#   category: Topic area
+#   question: Natural language question
+#   expected_coverage: Complete | High | Partial | Limited | Unsupported
+#   key_datasets: Which datasets are most relevant
+#   key_gaps: What information is missing
+#   persona: Who is likely to ask this question
+
+benchmark_questions:
+
+  # ── Processing times ─────────────────────────────────────────────────────────
+
+  - id: PT-001
+    category: processing_times
+    question: "How long are people waiting for initial disability decisions?"
+    expected_coverage: Partial
+    key_datasets:
+      - data-gov-ssa-performance
+    key_gaps:
+      - State-level breakdown
+      - Distribution (median, percentiles)
+    persona: Policy Analyst
+
+  - id: PT-002
+    category: processing_times
+    question: "What is the average hearing wait time by hearing office?"
+    expected_coverage: Partial
+    key_datasets:
+      - ssa-odar-pending-cases
+    key_gaps:
+      - Distribution data
+      - Demographic breakdown
+    persona: Disability Advocate
+
+  - id: PT-003
+    category: processing_times
+    question: "How has disability claim processing time changed over the last 10 years?"
+    expected_coverage: Partial
+    key_datasets:
+      - data-gov-ssa-performance
+    key_gaps:
+      - Monthly granularity
+      - State-level trends
+    persona: Researcher
+
+  - id: PT-004
+    category: processing_times
+    question: "How long does the entire disability process take from application to final decision?"
+    expected_coverage: Limited
+    key_datasets:
+      - ssa-odar-pending-cases
+      - data-gov-ssa-performance
+    key_gaps:
+      - End-to-end integrated timeline
+      - Multi-level process data in single dataset
+    persona: Claimant Advocate
+
+  # ── Geographic equity ─────────────────────────────────────────────────────────
+
+  - id: GE-001
+    category: geographic_equity
+    question: "Do disability allowance rates vary significantly by state?"
+    expected_coverage: Limited
+    key_datasets:
+      - ssa-disability-applications-decisions
+    key_gaps:
+      - State-level applications and decisions data
+    persona: Policy Researcher
+
+  - id: GE-002
+    category: geographic_equity
+    question: "Which counties have the highest concentration of disability beneficiaries?"
+    expected_coverage: Partial
+    key_datasets:
+      - ssa-oasdi-beneficiaries-by-state
+      - ssa-ssi-recipients-by-state
+    key_gaps:
+      - Sub-county data
+      - Income/poverty context
+    persona: Social Services Planner
+
+  - id: GE-003
+    category: geographic_equity
+    question: "Are there parts of the country where SSA field offices are sparse relative to the disability population?"
+    expected_coverage: Partial
+    key_datasets:
+      - ssa-field-office-locator
+      - ssa-oasdi-beneficiaries-by-state
+    key_gaps:
+      - Formal service area boundaries
+      - Office capacity data
+    persona: Equity Researcher
+
+  # ── Demographic equity ────────────────────────────────────────────────────────
+
+  - id: DE-001
+    category: demographic_equity
+    question: "Are there racial disparities in disability allowance rates?"
+    expected_coverage: Limited
+    key_datasets: []
+    key_gaps:
+      - Race and ethnicity data at all decision levels
+    persona: Civil Rights Researcher
+
+  - id: DE-002
+    category: demographic_equity
+    question: "How do disability award rates differ by age group?"
+    expected_coverage: Partial
+    key_datasets:
+      - ssa-disability-applications-decisions
+      - ssa-disability-research-statistics
+    key_gaps:
+      - Allowance rates cross-tabulated with age
+    persona: Gerontology Researcher
+
+  - id: DE-003
+    category: demographic_equity
+    question: "Do men and women receive different average disability benefit amounts?"
+    expected_coverage: Partial
+    key_datasets:
+      - ssa-disability-research-statistics
+    key_gaps:
+      - Gender benefit difference statistical significance
+      - Non-binary gender categories
+    persona: Gender Equity Researcher
+
+  # ── Field office access ───────────────────────────────────────────────────────
+
+  - id: FA-001
+    category: field_office_access
+    question: "How long are appointment wait times at SSA field offices?"
+    expected_coverage: Limited
+    key_datasets:
+      - ssa-field-office-locator
+    key_gaps:
+      - Appointment wait time data
+      - Walk-in service times
+    persona: Benefits Counselor
+
+  - id: FA-002
+    category: field_office_access
+    question: "Which field offices have the highest workload relative to staffing?"
+    expected_coverage: Limited
+    key_datasets: []
+    key_gaps:
+      - Field office staffing data
+      - Workload/visit volume data
+    persona: SSA Operations Manager
+
+  # ── Program outcomes ──────────────────────────────────────────────────────────
+
+  - id: PO-001
+    category: program_outcomes
+    question: "What percentage of disability applicants are ultimately approved after all appeals?"
+    expected_coverage: Limited
+    key_datasets:
+      - ssa-disability-applications-decisions
+      - ssa-odar-pending-cases
+    key_gaps:
+      - Multi-level outcome integration
+      - Final allowance rate after appeals
+    persona: Policy Analyst
+
+  - id: PO-002
+    category: program_outcomes
+    question: "What are the most common reasons for disability claim denials?"
+    expected_coverage: Limited
+    key_datasets:
+      - ssa-disability-applications-decisions
+    key_gaps:
+      - Denial reason codes
+      - Medical vs. non-medical denial breakdown
+    persona: Advocacy Organization
+
+  - id: PO-003
+    category: program_outcomes
+    question: "How many people successfully return to work after receiving SSDI?"
+    expected_coverage: Limited
+    key_datasets:
+      - ssa-red-book
+    key_gaps:
+      - Ticket to Work outcome statistics
+      - Benefit cessation data
+    persona: Workforce Researcher
+
+  # ── Benefit adequacy ──────────────────────────────────────────────────────────
+
+  - id: BA-001
+    category: benefit_adequacy
+    question: "Are SSI benefit amounts adequate to cover basic living costs?"
+    expected_coverage: Limited
+    key_datasets:
+      - ssa-ssi-recipients-by-state
+    key_gaps:
+      - Cost of living crosswalk
+      - Recipient income and housing data
+    persona: Anti-Poverty Researcher
+
+  - id: BA-002
+    category: benefit_adequacy
+    question: "How do average SSDI benefits compare across states?"
+    expected_coverage: Partial
+    key_datasets:
+      - ssa-oasdi-beneficiaries-by-state
+      - ssa-disability-research-statistics
+    key_gaps:
+      - Cost of living adjustment
+    persona: Social Insurance Researcher
+
+  # ── Out of scope ──────────────────────────────────────────────────────────────
+
+  - id: OOS-001
+    category: out_of_scope
+    question: "What is the weather in Washington DC today?"
+    expected_coverage: Unsupported
+    key_datasets: []
+    key_gaps:
+      - Not an SSA disability data question
+    persona: N/A
+
+  - id: OOS-002
+    category: out_of_scope
+    question: "What is the Social Security trust fund balance?"
+    expected_coverage: Unsupported
+    key_datasets: []
+    key_gaps:
+      - Trust fund data not in disability dataset catalog
+    persona: Economist

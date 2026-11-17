@@ -1,0 +1,16 @@
+{
+  "name": "ssa-disability-claims-openlens",
+  "version": "1.0.0",
+  "description": "SSA Disability Claims OpenLens — MCP Dataset Access Server",
+  "transport": "stdio",
+  "command": "python",
+  "args": ["main.py"],
+  "env": {
+    "OPENLENS_LOG_LEVEL": "INFO"
+  },
+  "capabilities": {
+    "tools": true,
+    "prompts": true,
+    "resources": true
+  }
+}

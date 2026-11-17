@@ -1,0 +1,36 @@
+name: ssa-disability-claims-openlens
+version: "1.0.0"
+description: >
+  SSA Disability Claims OpenLens — MCP Dataset Access Server that enables AI agents to
+  discover, understand, compare, and evaluate SSA public datasets. Signature capability:
+  Answer Coverage analysis.
+author: SSA OpenLens Team
+license: MIT
+runtime: python
+entrypoint: python main.py
+transport: stdio
+capabilities:
+  tools:
+    - discover_disability_datasets
+    - explain_dataset
+    - compare_datasets
+    - analyze_dataset_completeness
+    - assess_dataset_freshness
+    - evaluate_answer_coverage
+    - recommend_transparency_improvements
+  prompts:
+    - openlens_dataset_advisor
+    - transparency_reviewer
+    - answer_coverage_evaluator
+  resources:
+    - disability_datasets
+    - field_office_datasets
+    - answer_coverage_framework
+    - transparency_recommendations
+tags:
+  - ssa
+  - disability
+  - open-data
+  - transparency
+  - mcp
+  - answer-coverage

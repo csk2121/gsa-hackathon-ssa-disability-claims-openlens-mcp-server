@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ssa-disability-claims-openlens"
+version = "1.0.0"
+description = "SSA Disability Claims OpenLens — MCP Dataset Access Server for evaluating SSA public dataset coverage"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+keywords = ["mcp", "ssa", "disability", "open-data", "transparency"]
+authors = [{ name = "SSA OpenLens Team" }]
+
+dependencies = [
+    "mcp[cli]>=1.3.0",
+    "fastmcp>=2.0.0",
+    "pydantic>=2.7.0",
+    "pandas>=2.2.0",
+    "requests>=2.31.0",
+    "rich>=13.7.0",
+    "python-dotenv>=1.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+    "types-requests>=2.31.0",
+]
+
+[project.scripts]
+openlens = "ssa_disability_claims_openlens.app:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ssa_disability_claims_openlens"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "--cov=src --cov-report=term-missing --cov-report=xml -v"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*", "eval/*"]

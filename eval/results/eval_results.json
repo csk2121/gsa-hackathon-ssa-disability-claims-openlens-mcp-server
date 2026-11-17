@@ -1,0 +1,74 @@
+[
+  {
+    "question": "How many people are receiving SSDI benefits by state?",
+    "description": "Core SSDI beneficiary question \u2014 data partially available",
+    "passed": true,
+    "actual_score": 60.0,
+    "actual_rating": "Partial",
+    "expected_rating": "Partial",
+    "details": "PASS"
+  },
+  {
+    "question": "Are there racial disparities in SSA disability allowance rates?",
+    "description": "Equity question \u2014 race/ethnicity data not published",
+    "passed": true,
+    "actual_score": 30.0,
+    "actual_rating": "Limited",
+    "expected_rating": "Limited",
+    "details": "PASS"
+  },
+  {
+    "question": "How long are people waiting for appointments at field offices?",
+    "description": "Operational access question \u2014 location data exists but wait times not published",
+    "passed": true,
+    "actual_score": 44.0,
+    "actual_rating": "Partial",
+    "expected_rating": "Partial",
+    "details": "PASS"
+  },
+  {
+    "question": "What is the hearing office backlog by state?",
+    "description": "Hearing backlog question \u2014 ODAR data partially covers this",
+    "passed": true,
+    "actual_score": 60.0,
+    "actual_rating": "Partial",
+    "expected_rating": "Partial",
+    "details": "PASS"
+  },
+  {
+    "question": "How many SSI recipients are there in California by county?",
+    "description": "SSI geographic question \u2014 county data exists",
+    "passed": true,
+    "actual_score": 73.3,
+    "actual_rating": "Partial",
+    "expected_rating": "Partial",
+    "details": "PASS"
+  },
+  {
+    "question": "What is the weather in Washington DC today?",
+    "description": "Out-of-scope question \u2014 should return UNSUPPORTED",
+    "passed": true,
+    "actual_score": 0.0,
+    "actual_rating": "Unsupported",
+    "expected_rating": "Unsupported",
+    "details": "PASS"
+  },
+  {
+    "question": "How many SSA staff work at each hearing office?",
+    "description": "Staffing question \u2014 staffing not published, but workload data is a proxy",
+    "passed": true,
+    "actual_score": 20.0,
+    "actual_rating": "Limited",
+    "expected_rating": "Partial",
+    "details": "PASS"
+  },
+  {
+    "question": "What is the disability claim processing time by state and demographic group?",
+    "description": "Multi-dimension processing time question \u2014 partial coverage",
+    "passed": true,
+    "actual_score": 60.0,
+    "actual_rating": "Partial",
+    "expected_rating": "Partial",
+    "details": "PASS"
+  }
+]
