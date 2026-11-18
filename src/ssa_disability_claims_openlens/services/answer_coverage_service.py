@@ -6,24 +6,26 @@ The engine answers one question:
 
 Algorithm:
   1. Accept a natural language question.
-  2. Extract required information elements (keyword + semantic pattern matching).
-  3. Map elements to available datasets via a coverage knowledge base.
-  4. Score each element's coverage quality (Full / Partial / Proxy / None).
-  5. Compute an aggregate Answer Coverage Score (0–100).
-  6. Classify the score into a CoverageRating.
-  7. Identify critical and partial gaps.
-  8. Generate actionable transparency recommendations.
-  9. Return an AnswerCoverageAssessment.
+  2. Extract primary intent — what is the user fundamentally trying to understand?
+  3. Use intent to seed required information elements before keyword matching.
+  4. Match question keywords against the coverage knowledge base.
+  5. Merge intent-seeded and keyword-matched elements (deduplicated).
+  6. Score each element's coverage quality (Full / Partial / Proxy / None).
+  7. Compute an aggregate Answer Coverage Score (0–100).
+  8. Classify the score into a CoverageRating.
+  9. Identify critical and partial gaps.
+  10. Generate structured recommendations that directly address each gap,
+      with category labels and justifications.
+  11. Return an AnswerCoverageAssessment.
 
 Design decisions:
   - No LLM dependency: the engine uses deterministic pattern matching so it works
     offline and produces reproducible results. This is intentional for a tool that
     must be auditable and explainable.
-  - The coverage knowledge base is a maintainable dict — easy to extend as new
-    datasets are published.
-  - Scoring weights critical elements (high weight) separately from supporting
-    elements (lower weight) so a question cannot achieve "High" coverage if its
-    core information need is unmet.
+  - Intent extraction runs before keyword matching so meta-questions (e.g. "what
+    should SSA publish?") still map to the correct information needs.
+  - Each recommendation is linked to the specific gap it closes, categorised, and
+    accompanied by a justification — not a generic suggestion list.
 """
 
 from __future__ import annotations
@@ -37,6 +39,8 @@ from ..models import (
     CoverageRating,
     GapAnalysis,
     InformationElement,
+    IntentAnalysis,
+    RecommendationItem,
 )
 from ..utils import extract_keywords, get_logger, score_to_coverage_rating
 
@@ -83,9 +87,10 @@ _COVERAGE_KB: list[_CoverageEntry] = [
         weight=2,
     ),
     _CoverageEntry(
-        patterns=[r"appointment", r"walk.?in", r"office\s*visit", r"in.?person"],
-        element="Field office appointment wait times",
-        description="Wait times for in-person appointments at SSA field offices",
+        patterns=[r"appointment", r"walk.?in", r"office\s*visit", r"in.?person",
+                  r"walk.?in\s*traffic", r"appointment\s*volume"],
+        element="Field office appointment and walk-in volume",
+        description="Volume of in-person visits and appointments at SSA field offices",
         dataset_ids=[],
         coverage_quality="None",
         weight=2,
@@ -107,10 +112,25 @@ _COVERAGE_KB: list[_CoverageEntry] = [
         coverage_quality="Full",
         weight=1,
     ),
+    _CoverageEntry(
+        patterns=[r"field\s*office.*demand", r"field\s*office.*service",
+                  r"demand.*field\s*office", r"service.*field\s*office",
+                  r"field\s*office.*volume", r"field\s*office.*traffic",
+                  r"which.*office", r"highest.*office", r"busiest.*office"],
+        element="Field office operational metrics (staffing, volume, wait times)",
+        description=(
+            "Per-field-office operational data: staffing levels, appointment volumes, "
+            "walk-in traffic, and wait times needed to rank offices by service demand"
+        ),
+        dataset_ids=[],
+        coverage_quality="None",
+        weight=2,
+    ),
     # ── Staffing / workload ────────────────────────────────────────────────────
     _CoverageEntry(
         patterns=[r"staffing", r"staff\s*level", r"headcount", r"employees?", r"workers?\s*at",
-                  r"how\s*many.*staff", r"staff.*work\s*at", r"work\s*at.*office"],
+                  r"how\s*many.*staff", r"staff.*work\s*at", r"work\s*at.*office",
+                  r"staff.*capacity", r"office.*staff"],
         element="SSA office staffing levels",
         description="Number of adjudicators or staff at field or hearing offices",
         dataset_ids=[],
@@ -118,12 +138,14 @@ _COVERAGE_KB: list[_CoverageEntry] = [
         weight=2,
     ),
     _CoverageEntry(
-        patterns=[r"workload", r"case\s*load", r"capacity", r"productivity"],
+        patterns=[r"workload", r"case\s*load", r"capacity", r"productivity",
+                  r"demand", r"service\s*volume", r"busiest", r"highest.*demand",
+                  r"demand.*office", r"office.*demand"],
         element="Office workload and capacity",
         description="Case volume relative to office processing capacity",
         dataset_ids=["ssa-odar-pending-cases"],
         coverage_quality="Proxy",
-        weight=1,
+        weight=2,
     ),
     # ── Demographics ───────────────────────────────────────────────────────────
     _CoverageEntry(
@@ -249,34 +271,197 @@ _COVERAGE_KB: list[_CoverageEntry] = [
 ]
 
 
-# ── Recommendation knowledge base ─────────────────────────────────────────────
-# Maps missing information elements to suggested transparency improvements.
+# ── Intent knowledge base ──────────────────────────────────────────────────────
+# Maps intent patterns → (category, required_data_types, scope, element_ids_to_seed)
+# element_ids_to_seed are _CoverageEntry.element values to force-include before
+# keyword matching, so meta-questions still surface the right information needs.
 
-_TRANSPARENCY_REC_KB: dict[str, list[str]] = {
-    "Field office appointment wait times": [
-        "Publish monthly field office appointment wait time data by office",
-        "Report the percentage of visitors served within 30/60 minutes",
+@dataclass
+class _IntentEntry:
+    patterns: list[str]
+    category: str
+    primary_intent_template: str    # {q} replaced with the question
+    required_data_types: list[str]
+    scope: str
+    seed_elements: list[str]        # element names to force-include in matching
+    context_dataset_ids: list[str]  # datasets that provide domain context even when they
+                                    # don't directly answer the question
+
+
+_INTENT_KB: list[_IntentEntry] = [
+    _IntentEntry(
+        patterns=[r"field\s*office.*demand", r"which.*office.*high", r"busiest.*office",
+                  r"office.*service.*demand", r"highest.*demand"],
+        category="Access",
+        primary_intent_template="Identify which SSA field offices face the highest disability service demand",
+        required_data_types=["Office visit volumes", "Staffing levels", "Geographic beneficiary counts"],
+        scope="Field office level, national",
+        seed_elements=[
+            "Field office operational metrics (staffing, volume, wait times)",
+            "Office workload and capacity",
+            "SSA field office locations and coverage",
+        ],
+        context_dataset_ids=[
+            "ssa-field-office-locator",
+            "ssa-oasdi-beneficiaries-by-state",
+            "ssa-ssi-recipients-by-state",
+            "ssa-odar-pending-cases",
+        ],
+    ),
+    _IntentEntry(
+        patterns=[r"access(ib|ibility)", r"maximize.*understanding", r"what.*should.*publish",
+                  r"additional.*dataset", r"metrics.*should", r"publish.*first"],
+        category="Access",
+        primary_intent_template="Determine which SSA datasets or metrics would most improve public understanding of disability service accessibility",
+        required_data_types=["Office visit volumes", "Appointment wait times", "Staffing capacity", "Geographic coverage"],
+        scope="National, all field offices",
+        seed_elements=[
+            "Field office operational metrics (staffing, volume, wait times)",
+            "Field office appointment and walk-in volume",
+            "SSA office staffing levels",
+        ],
+        context_dataset_ids=[
+            "ssa-field-office-locator",
+            "ssa-oasdi-beneficiaries-by-state",
+            "ssa-ssi-recipients-by-state",
+            "ssa-odar-pending-cases",
+            "ssa-disability-applications-decisions",
+        ],
+    ),
+    _IntentEntry(
+        patterns=[r"racial\s*dispar", r"race.*dispar", r"equity.*race", r"ethnic.*dispar"],
+        category="Equity",
+        primary_intent_template="Assess whether racial or ethnic disparities exist in SSA disability program outcomes",
+        required_data_types=["Race/ethnicity breakdowns", "Allowance rates by demographics", "Application volumes by race"],
+        scope="National",
+        seed_elements=["Race and ethnicity data", "Disability program allowance rates"],
+        context_dataset_ids=[
+            "ssa-disability-applications-decisions",
+            "ssa-oasdi-beneficiaries-by-state",
+            "ssa-disability-research-statistics",
+        ],
+    ),
+    _IntentEntry(
+        patterns=[r"wait\s*time.*state", r"processing.*state", r"state.*processing",
+                  r"how\s*long.*state", r"state.*backlog"],
+        category="Performance",
+        primary_intent_template="Compare disability claim processing times or wait times across states",
+        required_data_types=["State-level processing times", "Hearing backlog by office", "Application volumes by state"],
+        scope="State level",
+        seed_elements=["Disability claim processing times", "Geographic disaggregation of outcomes"],
+        context_dataset_ids=[
+            "ssa-odar-pending-cases",
+            "data-gov-ssa-performance",
+            "ssa-oasdi-beneficiaries-by-state",
+        ],
+    ),
+    _IntentEntry(
+        patterns=[r"income", r"poverty", r"benefit.*adequacy", r"low.?income"],
+        category="Finance",
+        primary_intent_template="Evaluate SSI benefit adequacy relative to recipient income and poverty levels",
+        required_data_types=["Recipient income data", "Benefit payment amounts", "Local cost-of-living indicators"],
+        scope="National and state level",
+        seed_elements=["Applicant income and economic status", "Benefit amounts by geography and demographics"],
+        context_dataset_ids=[
+            "ssa-ssi-recipients-by-state",
+            "ssa-oasdi-beneficiaries-by-state",
+            "ssa-disability-research-statistics",
+        ],
+    ),
+    _IntentEntry(
+        patterns=[r"return\s*to\s*work", r"employment.*disab", r"work\s*incentive", r"ticket\s*to\s*work"],
+        category="Outcomes",
+        primary_intent_template="Measure outcomes of SSA work incentive programs for disability beneficiaries",
+        required_data_types=["Ticket to Work participation", "Trial Work Period outcomes", "Return-to-work rates"],
+        scope="National",
+        seed_elements=["Work incentive program participation and outcomes"],
+        context_dataset_ids=[
+            "ssa-red-book",
+            "ssa-disability-applications-decisions",
+        ],
+    ),
+]
+
+
+# ── Structured recommendation knowledge base ───────────────────────────────────
+# Maps missing information element names → list of RecommendationItem-like dicts.
+# Each entry directly addresses the named gap with a category and justification.
+
+_STRUCTURED_REC_KB: dict[str, list[dict]] = {
+    "Field office operational metrics (staffing, volume, wait times)": [
+        dict(text="Publish monthly field office visit volumes and appointment counts",
+             category="Operational Metrics",
+             justification="Without visit volume data, it is impossible to rank offices by demand or identify where resources are insufficient."),
+        dict(text="Publish staffing FTE counts by field office",
+             category="Operational Metrics",
+             justification="Staffing data combined with visit volumes would reveal offices where caseload-per-staff ratios indicate service strain."),
+        dict(text="Publish average appointment wait times by field office",
+             category="Access Data",
+             justification="Wait times are the most direct indicator of service accessibility and demand pressure at the office level."),
+        dict(text="Publish office service-capacity metrics (capacity utilisation, peak demand periods)",
+             category="Operational Metrics",
+             justification="Capacity metrics enable evidence-based decisions about resource reallocation and new office openings."),
+    ],
+    "Field office appointment and walk-in volume": [
+        dict(text="Publish monthly walk-in and appointment visit volumes by field office",
+             category="Access Data",
+             justification="Visit volumes are the foundational metric for measuring service demand and identifying access pressure points."),
+        dict(text="Publish the percentage of visitors served within 30 and 60 minutes",
+             category="Access Data",
+             justification="Time-to-service benchmarks translate volume data into a meaningful access equity indicator."),
     ],
     "SSA office staffing levels": [
-        "Publish annual FTE staffing levels by field office and hearing office",
-        "Report adjudicator-to-caseload ratios to contextualize processing times",
-    ],
-    "Race and ethnicity data": [
-        "Publish disability application, award, and denial rates disaggregated by race and ethnicity",
-        "Report race/ethnicity data at all levels of the appeals process",
-        "Partner with Census Bureau to link disability outcomes to demographic data",
-    ],
-    "Applicant income and economic status": [
-        "Publish SSI application and outcome data cross-tabulated with income decile",
-        "Report geographic correlation of benefit adequacy with local cost of living",
-    ],
-    "Work incentive program participation and outcomes": [
-        "Publish annual Ticket to Work assignment and return-to-work outcome statistics",
-        "Report earnings outcomes for beneficiaries using Trial Work Period provisions",
+        dict(text="Publish annual FTE staffing levels by field office and hearing office",
+             category="Operational Metrics",
+             justification="Staffing counts are needed to compute caseload ratios and explain processing time disparities across offices."),
+        dict(text="Report adjudicator-to-caseload ratios alongside pending case counts",
+             category="Operational Metrics",
+             justification="Ratios contextualise raw pending case numbers — a large backlog at a large office may be less severe than a smaller backlog at an understaffed one."),
     ],
     "Office workload and capacity": [
-        "Publish monthly caseload-to-staff ratios for field offices and hearing offices",
-        "Report hearing office disposition targets and actuals side-by-side",
+        dict(text="Publish monthly caseload-to-staff ratios for field offices and hearing offices",
+             category="Operational Metrics",
+             justification="Caseload ratios are the standard workload measure and would directly answer questions about which offices are under the most pressure."),
+        dict(text="Report hearing office disposition targets and actuals side-by-side",
+             category="Performance",
+             justification="Target-vs-actual comparison reveals whether offices are meeting workload commitments, not just reporting raw counts."),
+    ],
+    "Race and ethnicity data": [
+        dict(text="Publish disability application, award, and denial rates disaggregated by race and ethnicity",
+             category="Demographic Data",
+             justification="Race/ethnicity breakdowns are the minimum required to assess whether the disability adjudication process produces equitable outcomes."),
+        dict(text="Report race/ethnicity data at all levels of the appeals process (initial, reconsideration, hearing)",
+             category="Demographic Data",
+             justification="Disparities may emerge or widen at specific decision levels; publishing at each level pinpoints where intervention is needed."),
+        dict(text="Partner with the Census Bureau to link disability outcomes to demographic survey data",
+             category="Demographic Data",
+             justification="Linked data would enable analysis of socioeconomic context alongside program outcomes, supporting richer equity research."),
+    ],
+    "Applicant income and economic status": [
+        dict(text="Publish SSI application and outcome data cross-tabulated with income decile",
+             category="Program Outcomes",
+             justification="SSI is a means-tested program; without income data it is impossible to evaluate whether the program reaches its intended population."),
+        dict(text="Report geographic correlation of benefit amounts with local cost of living",
+             category="Finance",
+             justification="A fixed federal benefit has very different purchasing power across regions; this analysis requires both benefit and cost-of-living data."),
+    ],
+    "Work incentive program participation and outcomes": [
+        dict(text="Publish annual Ticket to Work assignment and return-to-work outcome statistics",
+             category="Program Outcomes",
+             justification="Participation counts without outcomes cannot demonstrate whether work incentive programs achieve their goal of reducing benefit dependency."),
+        dict(text="Report earnings outcomes for beneficiaries using Trial Work Period provisions",
+             category="Program Outcomes",
+             justification="Earnings data would show whether the Trial Work Period is functioning as a bridge to employment or is primarily used without sustained work."),
+    ],
+    "Hearing-level wait times": [
+        dict(text="Publish wait-time distributions (median, 90th percentile) alongside averages for hearing offices",
+             category="Temporal Granularity",
+             justification="Averages mask severe outliers; distributional data exposes the worst-case experience for claimants waiting the longest."),
+    ],
+    "Disability claim processing times": [
+        dict(text="Publish state-level initial claim processing times disaggregated from national averages",
+             category="Geographic Detail",
+             justification="National averages conceal large state-level variation; state-level data would enable geographic equity analysis of initial claim timelines."),
     ],
 }
 
@@ -318,10 +503,57 @@ class AnswerCoverageEngine:
     """
     Deterministic engine that evaluates how well SSA public datasets support
     answering a natural language question.
+
+    Pipeline:
+      1. Extract primary intent from the question.
+      2. Use intent to seed required information elements (catches meta-questions).
+      3. Keyword-match the question against the coverage KB.
+      4. Merge seeded + matched entries (deduplicated by element name).
+      5. Score, rate, gap-analyse, build structured recommendations.
     """
 
     def __init__(self, knowledge_base: list[_CoverageEntry] | None = None) -> None:
         self._kb = knowledge_base if knowledge_base is not None else _COVERAGE_KB
+        # Build a name→entry index for fast seed lookups
+        self._kb_by_element: dict[str, _CoverageEntry] = {e.element: e for e in self._kb}
+
+    # ── Step 1: Intent extraction ──────────────────────────────────────────────
+
+    def _extract_intent(self, question: str) -> IntentAnalysis | None:
+        """
+        Match the question against the intent KB.
+
+        Returns the first matching IntentAnalysis, or None if no intent matches.
+        The intent is used to (a) display what the engine understood, and (b)
+        seed required elements before keyword matching begins.
+        """
+        q = question.lower()
+        for entry in _INTENT_KB:
+            if any(re.search(p, q) for p in entry.patterns):
+                return IntentAnalysis(
+                    primary_intent=entry.primary_intent_template,
+                    intent_category=entry.category,
+                    required_data_types=entry.required_data_types,
+                    scope=entry.scope,
+                )
+        return None
+
+    def _get_seed_entries(self, question: str) -> list[tuple[_CoverageEntry, int]]:
+        """
+        Return KB entries that the intent KB says are always required for this question,
+        regardless of whether the keywords appear explicitly.
+        """
+        q = question.lower()
+        seeded: list[tuple[_CoverageEntry, int]] = []
+        for intent_entry in _INTENT_KB:
+            if any(re.search(p, q) for p in intent_entry.patterns):
+                for element_name in intent_entry.seed_elements:
+                    kb_entry = self._kb_by_element.get(element_name)
+                    if kb_entry:
+                        seeded.append((kb_entry, kb_entry.weight))
+        return seeded
+
+    # ── Step 2: Keyword matching ───────────────────────────────────────────────
 
     def _match_entries(self, question: str) -> list[tuple[_CoverageEntry, int]]:
         """Return (entry, weight) pairs where the entry patterns match the question."""
@@ -331,6 +563,23 @@ class AnswerCoverageEngine:
             if any(re.search(p, question_lower) for p in entry.patterns):
                 matched.append((entry, entry.weight))
         return matched
+
+    # ── Step 3: Merge seeded + matched (deduplicate by element name) ───────────
+
+    def _merge_entries(
+        self,
+        seeded: list[tuple[_CoverageEntry, int]],
+        matched: list[tuple[_CoverageEntry, int]],
+    ) -> list[tuple[_CoverageEntry, int]]:
+        seen: set[str] = set()
+        merged: list[tuple[_CoverageEntry, int]] = []
+        for entry, weight in seeded + matched:
+            if entry.element not in seen:
+                merged.append((entry, weight))
+                seen.add(entry.element)
+        return merged
+
+    # ── Step 4: Build InformationElements ─────────────────────────────────────
 
     def _build_elements(
         self, matched: list[tuple[_CoverageEntry, int]]
@@ -345,6 +594,8 @@ class AnswerCoverageEngine:
             )
             for entry, _ in matched
         ]
+
+    # ── Step 5: Gap analysis ───────────────────────────────────────────────────
 
     def _build_gap_analysis(
         self, elements: list[InformationElement], question: str
@@ -369,7 +620,6 @@ class AnswerCoverageEngine:
                 "sub-national detail, or timely update frequency"
             )
 
-        # Build impact statement
         if not critical_gaps:
             impact = (
                 "The question can be substantially addressed using existing public data, "
@@ -395,38 +645,79 @@ class AnswerCoverageEngine:
             impact_on_answer=impact,
         )
 
-    def _build_recommendations(
-        self, elements: list[InformationElement]
-    ) -> list[str]:
-        recs: list[str] = []
-        for el in elements:
-            if not el.available or el.coverage_quality in ("Partial", "Proxy", "None"):
-                for rec in _TRANSPARENCY_REC_KB.get(el.element, []):
-                    if rec not in recs:
-                        recs.append(rec)
+    # ── Step 6: Structured recommendations ────────────────────────────────────
 
-        # Generic fallback if no specific recommendations were found
-        if not recs:
-            recs.append(
-                "Consider publishing more granular breakdowns of the relevant datasets "
-                "to improve answer coverage for this type of question."
-            )
-        return recs[:6]  # Limit to 6 to keep output actionable
+    def _build_structured_recommendations(
+        self, elements: list[InformationElement]
+    ) -> list[RecommendationItem]:
+        """
+        Build RecommendationItems that are directly tied to identified gaps.
+
+        Only elements that are missing or only partially/proxy covered generate
+        recommendations. Each item names the gap it closes, its category, and
+        a justification — so the report is self-explaining.
+        """
+        items: list[RecommendationItem] = []
+        seen_texts: set[str] = set()
+
+        for el in elements:
+            if el.coverage_quality in ("None", "Partial", "Proxy"):
+                for rec_dict in _STRUCTURED_REC_KB.get(el.element, []):
+                    text = rec_dict["text"]
+                    if text not in seen_texts:
+                        items.append(RecommendationItem(
+                            text=text,
+                            closes_gap=el.element,
+                            category=rec_dict["category"],
+                            justification=rec_dict["justification"],
+                        ))
+                        seen_texts.add(text)
+
+        # Fallback for gaps with no specific KB entry
+        for el in elements:
+            if el.coverage_quality == "None" and el.element not in _STRUCTURED_REC_KB:
+                fallback = f"Publish data covering: {el.element}"
+                if fallback not in seen_texts:
+                    items.append(RecommendationItem(
+                        text=fallback,
+                        closes_gap=el.element,
+                        category="Program Outcomes",
+                        justification=(
+                            f"This information element is entirely absent from public data "
+                            f"and is required to answer questions about {el.element.lower()}."
+                        ),
+                    ))
+                    seen_texts.add(fallback)
+
+        return items[:8]  # Cap at 8 to keep the report actionable
+
+    # ── Main evaluate ──────────────────────────────────────────────────────────
 
     def evaluate(self, question: str) -> AnswerCoverageAssessment:
         """
-        Run the Answer Coverage Engine against a natural language question.
+        Run the full Answer Coverage pipeline against a natural language question.
 
         Returns a fully populated AnswerCoverageAssessment.
         """
         logger.info(f"Evaluating answer coverage for: {question[:80]}...")
 
+        # 1. Extract intent
+        intent = self._extract_intent(question)
+
+        # 2. Seed required elements from intent
+        seeded = self._get_seed_entries(question)
+
+        # 3. Keyword-match the question
         matched = self._match_entries(question)
 
-        # If nothing matched, return Unsupported with a generic gap note
-        if not matched:
+        # 4. Merge (intent seeds first, so they appear at the top)
+        all_matched = self._merge_entries(seeded, matched)
+
+        # If nothing matched at all (no intent seed, no keyword hit), return Unsupported
+        if not all_matched:
             return AnswerCoverageAssessment(
                 question=question,
+                intent=None,
                 answer_coverage_score=0.0,
                 coverage_rating=CoverageRating.UNSUPPORTED,
                 required_information_elements=[],
@@ -440,6 +731,7 @@ class AnswerCoverageEngine:
                     root_causes=["Question may be outside SSA disability program scope"],
                     impact_on_answer="This question cannot be answered from SSA public datasets.",
                 ),
+                structured_recommendations=[],
                 transparency_recommendations=[
                     "Consider whether this question falls within the scope of SSA disability data. "
                     "If so, file a data request with the SSA Open Data Program."
@@ -448,49 +740,85 @@ class AnswerCoverageEngine:
                 datasets_consulted=[],
             )
 
-        elements = self._build_elements(matched)
-        weights = [w for _, w in matched]
+        # 5. Build elements and score
+        elements = self._build_elements(all_matched)
+        weights = [w for _, w in all_matched]
 
-        # Score
         score = _compute_weighted_score(elements, weights)
         rating = score_to_coverage_rating(score)
 
-        # Available vs. missing
-        available_data: list[str] = []
+        # 6. Available vs. missing
         missing_information: list[str] = []
         all_dataset_ids: set[str] = set()
 
         for el in elements:
             if el.available:
-                quality_note = f" ({el.coverage_quality} coverage)" if el.coverage_quality != "Full" else ""
-                available_data.append(f"{el.element}{quality_note}")
                 all_dataset_ids.update(el.dataset_ids)
             else:
                 missing_information.append(el.element)
 
-        # Enrich available_data with dataset names for context
-        available_data_with_sources: list[str] = []
+        # Collect context dataset IDs from matched intent entries.
+        # These are catalog datasets that provide domain context for the question
+        # even when they don't directly supply the missing metrics.
+        context_dataset_ids: set[str] = set()
+        q_lower = question.lower()
+        for intent_entry in _INTENT_KB:
+            if any(re.search(p, q_lower) for p in intent_entry.patterns):
+                context_dataset_ids.update(intent_entry.context_dataset_ids)
+
+        # Merge: direct dataset IDs (from matched elements) take precedence;
+        # context IDs fill in when no element-level datasets were found.
+        display_dataset_ids = all_dataset_ids | context_dataset_ids
+
+        # Build available_data as short dataset names, and available_data_with_urls
+        # as [{name, url}] dicts for tabular rendering in the report.
         from ..services.dataset_catalog_service import get_catalog_service  # local import avoids circular
+        available_data_with_sources: list[str] = []
+        available_data_with_urls: list[dict] = []
+        context_note: str = ""
         try:
             catalog = get_catalog_service()
-            id_to_name = {
-                ds.dataset_id: ds.name for ds in catalog.list_datasets()
-            }
-            for item in available_data:
-                available_data_with_sources.append(item)
-            # Add a summary of which datasets were used
-            used_names = [id_to_name.get(did, did) for did in sorted(all_dataset_ids)]
-            if used_names:
-                available_data_with_sources.append(
-                    f"Source datasets: {', '.join(used_names)}"
+            all_ds = catalog.list_datasets()
+            id_to_name = {ds.dataset_id: ds.name for ds in all_ds}
+            id_to_url = {ds.dataset_id: ds.url for ds in all_ds}
+            seen: set[str] = set()
+            for did in sorted(display_dataset_ids):
+                name = id_to_name.get(did, did)
+                if name not in seen:
+                    available_data_with_sources.append(name)
+                    url = id_to_url.get(did, "")
+                    available_data_with_urls.append({"name": name, "url": url})
+                    seen.add(name)
+
+            # Add a context note when available datasets are contextual only
+            # (i.e. none of them directly supply the required metrics)
+            if available_data_with_sources and not all_dataset_ids:
+                context_note = (
+                    "These datasets provide contextual information about disability "
+                    "populations and office locations but do not provide direct measures "
+                    "of service accessibility."
                 )
         except Exception:  # noqa: BLE001
-            available_data_with_sources = available_data
+            available_data_with_sources = sorted(display_dataset_ids)
+            available_data_with_urls = [{"name": did, "url": ""} for did in sorted(display_dataset_ids)]
 
+        # 7. Gap analysis and recommendations
         gap_analysis = self._build_gap_analysis(elements, question)
-        recommendations = self._build_recommendations(elements)
+        structured_recs = self._build_structured_recommendations(elements)
+        plain_recs = [r.text for r in structured_recs]
 
-        # Potential impact
+        # 8. Floor rule: Unsupported → Limited when domain context was found.
+        #
+        #    Unsupported means the engine could not map the question to any known
+        #    SSA domain. If the engine successfully extracted intent OR produced
+        #    structured recommendations, it *did* find domain context — it knows
+        #    what data is needed, what is missing, and what SSA should publish.
+        #    That is exactly what Limited means: relevant domain found, major gaps
+        #    prevent a complete answer. Leaving it as Unsupported would be wrong.
+        if rating == CoverageRating.UNSUPPORTED and (intent is not None or structured_recs):
+            rating = CoverageRating.LIMITED
+
+        # 9. Potential impact
         if rating in (CoverageRating.UNSUPPORTED, CoverageRating.LIMITED):
             potential_impact = (
                 "Publishing the missing data elements would substantially improve public "
@@ -510,13 +838,17 @@ class AnswerCoverageEngine:
 
         return AnswerCoverageAssessment(
             question=question,
+            intent=intent,
             answer_coverage_score=score,
             coverage_rating=rating,
             required_information_elements=elements,
             available_data=available_data_with_sources,
+            available_data_with_urls=available_data_with_urls,
+            available_data_context_note=context_note,
             missing_information=missing_information,
             gap_analysis=gap_analysis,
-            transparency_recommendations=recommendations,
+            structured_recommendations=structured_recs,
+            transparency_recommendations=plain_recs,
             potential_impact=potential_impact,
             datasets_consulted=sorted(all_dataset_ids),
         )

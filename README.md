@@ -34,36 +34,78 @@ OpenLens is a production-quality **MCP (Model Context Protocol) Dataset Access S
 
 ### Signature Capability: Answer Coverage
 
-The `evaluate_answer_coverage` tool is the heart of OpenLens. It accepts a natural language question and returns:
+The `evaluate_answer_coverage` tool is the heart of OpenLens. It accepts a natural language question and returns a pre-formatted `report` field that must be presented verbatim. Example output:
 
 ```
-Answer Coverage: Partial (40%)
+SSA Disability Claims OpenLens Assessment
+===================================
+
+Question
+--------
+Which SSA field offices have the highest disability service demand?
+
+Intent
+------
+**Primary intent**: Identify which SSA field offices face the highest disability service demand
+**Category**: Access
+**Scope**: Field office level, national
+**Required data**: Office visit volumes, Staffing levels, Geographic beneficiary counts
+
+Answer Coverage
+---------------
+**Limited**
+
+Assessment Confidence
+---------------------
+**Medium**
 
 Available Data
 --------------
-- Disability claim processing times (Partial coverage)
-- Hearing-level wait times (Partial coverage)
-- Source datasets: ODAR Pending Cases, SSA Annual Performance Report
+| Sl.# | Data | Web Link |
+|------|------|----------|
+| 1 | SSA Field Office Locations | https://www.ssa.gov/locator/ |
+| 2 | OASDI Beneficiaries by State and County | https://www.ssa.gov/policy/docs/statcomps/oasdi_sc/ |
+| 3 | ODAR Pending Cases by Hearing Office | https://www.ssa.gov/appeals/DataSets.html |
+| 4 | SSI Recipients by State and County | https://www.ssa.gov/policy/docs/statcomps/ssi_sc/ |
 
 Missing Information
 -------------------
-- Field office appointment wait times
+- Field office operational metrics (staffing, volume, wait times)
+- Field office appointment and walk-in volume
 - SSA office staffing levels
 
 Gap Analysis
 ------------
-The question cannot be reliably answered from public data alone.
-Critical missing element: Field office appointment wait times.
+**Critical gaps** (data not publicly available):
+- Field office operational metrics (staffing, volume, wait times)
+
+**Partial gaps** (data exists but incomplete):
+- Office workload and capacity
+
+**Impact**: The question cannot be reliably answered from public data alone.
+Critical missing elements require data that SSA has not published.
 
 Transparency Recommendations
 ----------------------------
-- Publish monthly field office appointment wait time data by office
-- Report the percentage of visitors served within 30/60 minutes
+
+**[Operational Metrics]**
+
+1. Publish monthly field office visit volumes and appointment counts
+   **Closes gap**: Field office operational metrics (staffing, volume, wait times)
+   **Justification**: Without visit volume data, it is impossible to rank offices
+   by demand or identify where resources are insufficient.
+
+**[Access Data]**
+
+1. Publish average appointment wait times by field office
+   **Closes gap**: Field office operational metrics (staffing, volume, wait times)
+   **Justification**: Wait times are the most direct indicator of service
+   accessibility and demand pressure at the office level.
 
 Potential Impact
 ----------------
-Closing identified gaps would upgrade this question from 'Partial' to
-'High' coverage, enabling more confident public analysis of SSA access equity.
+Publishing the missing data elements would substantially improve public ability
+to evaluate SSA program equity, efficiency, and access.
 ```
 
 ---
@@ -156,7 +198,9 @@ Evaluate how current a dataset is relative to its stated update frequency.
 ### `evaluate_answer_coverage` ⭐ SIGNATURE TOOL
 Evaluate how well SSA public datasets support answering a natural language question. Returns a 0–100 score, coverage rating, available data, missing information, gap analysis, and recommendations.
 
-**Coverage levels:** Complete (90–100%) | High (75–89%) | Partial (40–74%) | Limited (15–39%) | Unsupported (0–14%)
+**Coverage levels:** Complete | High | Partial | Limited | Unsupported
+
+**Tool returns three fields:** `report` (verbatim markdown), `coverage_rating`, `datasets_consulted`
 
 **Example prompts:**
 - *"Can SSA data answer: how long are people waiting for disability decisions by state?"*
@@ -264,6 +308,31 @@ See [`.env.example`](.env.example) for all configuration options. The server run
 │   └── benchmark_questions.yaml
 └── docs/                            # Documentation
 ```
+
+---
+
+## Coverage Levels & Assessment Confidence
+
+### Answer Coverage Ratings
+
+| Rating | Meaning |
+|--------|---------|
+| Complete | Directly answerable from existing public datasets |
+| High | Most information available; minor gaps remain |
+| Partial | Relevant datasets support part of the analysis; some critical gaps |
+| Limited | Relevant datasets found, but major gaps prevent a complete answer |
+| Unsupported | No relevant datasets found; question outside known SSA domain |
+
+### Assessment Confidence
+
+Measures how certain the engine is about the **quality of its own analysis** — not how much data SSA has published.
+
+| Condition | Assessment Confidence |
+|-----------|----------------------|
+| No relevant datasets found (Unsupported) | **Low** |
+| Relevant datasets found but weak evidence (Limited) | **Medium** |
+| Relevant datasets found + clear gaps identified (Partial) | **High** |
+| Relevant datasets found + multiple corroborating datasets (High / Complete) | **High** |
 
 ---
 

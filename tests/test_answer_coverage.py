@@ -136,7 +136,7 @@ class TestEvaluateAnswerCoverage:
             "How many people are waiting for disability hearings by state?"
         )
         report = assessment.format_report()
-        assert "Answer Coverage:" in report
+        assert "Answer Coverage" in report
         assert "Available Data" in report
         assert "Missing Information" in report
         assert "Gap Analysis" in report

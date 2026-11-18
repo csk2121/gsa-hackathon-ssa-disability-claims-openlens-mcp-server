@@ -43,13 +43,25 @@ class UpdateFrequency(str, Enum):
 
 
 class CoverageRating(str, Enum):
-    """Qualitative rating of Answer Coverage."""
+    """
+    Qualitative rating of Answer Coverage.
 
-    COMPLETE = "Complete"       # 90–100 %
-    HIGH = "High"               # 75–89 %
-    PARTIAL = "Partial"         # 40–74 %
-    LIMITED = "Limited"         # 15–39 %
-    UNSUPPORTED = "Unsupported"  # 0–14 %
+    Unsupported — No relevant datasets found; engine could not map the question
+                  to any known SSA domain.
+    Limited     — Relevant datasets found, but major gaps prevent a complete
+                  answer. The engine has enough domain context to identify what
+                  is missing and recommend what should be published.
+    Partial     — Relevant datasets support part of the analysis; some critical
+                  information is unavailable or only proxy-covered.
+    High        — Most information is available; minor gaps remain.
+    Complete    — Directly answerable from existing public datasets.
+    """
+
+    COMPLETE = "Complete"        # 90–100
+    HIGH = "High"                # 75–89
+    PARTIAL = "Partial"          # 40–74
+    LIMITED = "Limited"          # 15–39
+    UNSUPPORTED = "Unsupported"  # 0–14  AND no domain match / no intent found
 
 
 class RecommendationPriority(str, Enum):
@@ -197,6 +209,30 @@ class FreshnessAssessment(BaseModel):
 # ── Answer Coverage models ─────────────────────────────────────────────────────
 
 
+class IntentAnalysis(BaseModel):
+    """
+    Primary intent extracted from the user's question before dataset matching.
+
+    Identifies what the user is fundamentally trying to understand so that
+    dataset matching and gap analysis are anchored to the real information need
+    rather than raw keyword hits.
+    """
+
+    primary_intent: str = Field(description="One-sentence statement of what the user wants to know")
+    intent_category: str = Field(
+        description=(
+            "High-level category: Access | Equity | Outcomes | Performance | "
+            "Demographics | Finance | Policy | Unknown"
+        )
+    )
+    required_data_types: list[str] = Field(
+        description="The types of data logically required to answer the question"
+    )
+    scope: str = Field(
+        description="Geographic or programmatic scope inferred from the question"
+    )
+
+
 class InformationElement(BaseModel):
     """An atomic piece of information required to answer a question."""
 
@@ -228,6 +264,25 @@ class GapAnalysis(BaseModel):
     impact_on_answer: str = Field(description="How the gaps affect answer quality")
 
 
+class RecommendationItem(BaseModel):
+    """
+    A single transparency recommendation tied directly to a missing information gap.
+
+    Each recommendation names the gap it closes, the category it belongs to,
+    and a one-sentence justification explaining why publishing this data matters.
+    """
+
+    text: str = Field(description="The actionable recommendation")
+    closes_gap: str = Field(description="The missing information element this recommendation addresses")
+    category: str = Field(
+        description=(
+            "Recommendation category: Operational Metrics | Demographic Data | "
+            "Geographic Detail | Temporal Granularity | Program Outcomes | Access Data"
+        )
+    )
+    justification: str = Field(description="Why publishing this data would improve public understanding")
+
+
 class AnswerCoverageAssessment(BaseModel):
     """
     Signature output model: measures how well SSA public datasets support
@@ -235,6 +290,10 @@ class AnswerCoverageAssessment(BaseModel):
     """
 
     question: str = Field(description="The original user question")
+    intent: Optional[IntentAnalysis] = Field(
+        default=None,
+        description="Extracted primary intent before dataset matching",
+    )
     answer_coverage_score: float = Field(
         ge=0.0, le=100.0,
         description="0–100 score representing dataset support for the question",
@@ -248,12 +307,30 @@ class AnswerCoverageAssessment(BaseModel):
     available_data: list[str] = Field(
         description="Datasets and fields that contribute to answering"
     )
+    available_data_with_urls: list[dict] = Field(
+        default_factory=list,
+        description=(
+            "Available datasets with web links. Each entry has 'name' and 'url' keys. "
+            "Used to render the tabular Available Data section in the report."
+        ),
+    )
+    available_data_context_note: str = Field(
+        default="",
+        description=(
+            "Optional note clarifying the role of available datasets when they provide "
+            "domain context but do not directly supply the required metrics."
+        ),
+    )
     missing_information: list[str] = Field(
         description="Information needed but not found in any public dataset"
     )
     gap_analysis: GapAnalysis
+    structured_recommendations: list[RecommendationItem] = Field(
+        default_factory=list,
+        description="Recommendations with gap linkage, category, and justification",
+    )
     transparency_recommendations: list[str] = Field(
-        description="Actionable recommendations to close identified gaps"
+        description="Actionable recommendations to close identified gaps (plain text)"
     )
     potential_impact: str = Field(
         description="Expected public benefit if gaps are closed"
@@ -267,16 +344,83 @@ class AnswerCoverageAssessment(BaseModel):
     def round_score(cls, v: float) -> float:
         return round(v, 1)
 
+    def _confidence_label(self) -> str:
+        """
+        Derive an Assessment Confidence label from the coverage rating.
+
+        This measures the engine's certainty about its own analysis — not how
+        much data SSA has published (that is what Answer Coverage captures).
+
+        Low    — No relevant datasets found (Unsupported). The engine could not
+                 map the question to any known SSA domain.
+        Medium — Relevant datasets found but weak evidence (Limited). The engine
+                 identified the domain and gaps, but direct supporting datasets
+                 are mostly absent; analysis rests on context data only.
+        High   — Relevant datasets found with clear gaps identified (Partial),
+                 OR multiple corroborating datasets found (High / Complete).
+                 The engine produced a fully grounded analysis.
+        """
+        if self.coverage_rating == CoverageRating.UNSUPPORTED:
+            return "Low"
+        if self.coverage_rating == CoverageRating.LIMITED:
+            return "Medium"
+        return "High"
+
     def format_report(self) -> str:
-        """Return a human-readable Answer Coverage report."""
+        """Return a human-readable OpenLens Assessment report."""
         lines: list[str] = [
-            f"Answer Coverage: {self.coverage_rating.value} ({self.answer_coverage_score:.0f}%)",
+            "SSA Disability Claims OpenLens Assessment",
+            "===================================",
+            "",
+            "Question",
+            "--------",
+            self.question,
+            "",
+        ]
+
+        # Intent block — only shown when intent was successfully extracted
+        if self.intent:
+            lines += [
+                "Intent",
+                "------",
+                f"**Primary intent**: {self.intent.primary_intent}  ",
+                f"**Category**: {self.intent.intent_category}  ",
+                f"**Scope**: {self.intent.scope}  ",
+                f"**Required data**: {', '.join(self.intent.required_data_types)}",
+                "",
+            ]
+
+        lines += [
+            "Answer Coverage",
+            "---------------",
+            f"**{self.coverage_rating.value}**",
+            "",
+            "Assessment Confidence",
+            "---------------------",
+            f"**{self._confidence_label()}**",
             "",
             "Available Data",
             "--------------",
         ]
-        for item in self.available_data:
-            lines.append(f"- {item}")
+        if self.available_data_with_urls:
+            # Markdown pipe table — renders correctly in any proportional-font renderer
+            lines.append("| Sl.# | Data | Web Link |")
+            lines.append("|------|------|----------|")
+            for idx, entry in enumerate(self.available_data_with_urls, start=1):
+                name = entry.get("name", "")
+                url = entry.get("url", "")
+                lines.append(f"| {idx} | {name} | {url} |")
+        else:
+            display_available = [
+                item for item in self.available_data
+                if not item.startswith("Source datasets:")
+            ]
+            for item in display_available:
+                lines.append(f"\u2713 {item}")
+
+        if self.available_data_context_note:
+            lines.append(f"\n{self.available_data_context_note}")
+
         lines += [
             "",
             "Missing Information",
@@ -284,23 +428,46 @@ class AnswerCoverageAssessment(BaseModel):
         ]
         for item in self.missing_information:
             lines.append(f"- {item}")
+
         lines += [
             "",
             "Gap Analysis",
             "------------",
-            self.gap_analysis.impact_on_answer,
         ]
         if self.gap_analysis.critical_gaps:
-            lines.append("\nCritical Gaps:")
-            for gap in self.gap_analysis.critical_gaps:
-                lines.append(f"  • {gap}")
-        lines += [
-            "",
-            "Transparency Recommendations",
-            "----------------------------",
-        ]
-        for rec in self.transparency_recommendations:
-            lines.append(f"- {rec}")
+            lines.append("**Critical gaps** (data not publicly available):")
+            for g in self.gap_analysis.critical_gaps:
+                lines.append(f"- {g}")
+            lines.append("")
+        if self.gap_analysis.partial_gaps:
+            lines.append("**Partial gaps** (data exists but incomplete):")
+            for g in self.gap_analysis.partial_gaps:
+                lines.append(f"- {g}")
+            lines.append("")
+        lines.append(f"**Impact**: {self.gap_analysis.impact_on_answer}")
+
+        # Structured recommendations grouped by category
+        if self.structured_recommendations:
+            lines += ["", "Transparency Recommendations", "----------------------------"]
+            # Group by category preserving insertion order
+            by_category: dict[str, list[RecommendationItem]] = {}
+            for r in self.structured_recommendations:
+                by_category.setdefault(r.category, []).append(r)
+            for category, recs in by_category.items():
+                lines.append(f"\n**[{category}]**")
+                for idx, r in enumerate(recs, start=1):
+                    # Two trailing spaces before \n produce a <br> hard line break in
+                    # every markdown renderer — the only approach that guarantees each
+                    # label appears on its own line without triggering list renumbering
+                    # or paragraph merging.
+                    lines.append(f"\n{idx}. {r.text}  ")
+                    lines.append(f"   **Closes gap**: {r.closes_gap}  ")
+                    lines.append(f"   **Justification**: {r.justification}")
+        else:
+            lines += ["", "Transparency Recommendations", "----------------------------"]
+            for idx, rec in enumerate(self.transparency_recommendations, start=1):
+                lines.append(f"{idx}. {rec}")
+
         lines += [
             "",
             "Potential Impact",
