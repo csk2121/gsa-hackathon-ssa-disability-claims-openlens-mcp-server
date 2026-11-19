@@ -10,15 +10,17 @@ This service evaluates individual datasets on two orthogonal dimensions:
 from __future__ import annotations
 
 from datetime import date
+from typing import Optional
 
 from ..models import (
     CompletenessAnalysis,
     CoverageAxis,
     DatasetDetail,
     FreshnessAssessment,
+    FreshnessStatus,
     UpdateFrequency,
 )
-from ..utils import compute_freshness_score, days_since, get_logger
+from ..utils import compute_freshness_score, days_since, frequency_to_expected_days, get_logger
 
 logger = get_logger(__name__)
 
@@ -397,25 +399,69 @@ class DatasetAnalysisService:
             days_since_update=elapsed,
             freshness_score=score,
             freshness_status=status,
+            freshness_rationale=self._freshness_rationale(
+                score, status, dataset.update_frequency, dataset.last_updated, elapsed
+            ),
             staleness_indicators=staleness,
             analyst_notes=self._freshness_note(score, dataset.update_frequency, elapsed),
         )
+
+    @staticmethod
+    def _freshness_rationale(
+        score: float,
+        status: FreshnessStatus,
+        freq: UpdateFrequency,
+        last_updated: Optional[date],
+        elapsed: Optional[int],
+    ) -> str:
+        if status == FreshnessStatus.UNKNOWN or elapsed is None or last_updated is None:
+            return (
+                "OpenLens could not determine dataset freshness because required update "
+                "metadata is unavailable. The dataset is classified as Unknown until "
+                "sufficient metadata is available."
+            )
+
+        expected = frequency_to_expected_days(freq) or 180
+        overdue = elapsed - expected
+
+        line1 = f"- This dataset is expected to be updated {freq.value.lower()}."
+        line2 = f"- The most recent catalog metadata indicates an update date of {last_updated}."
+
+        if status == FreshnessStatus.CURRENT:
+            line3 = f"- The dataset is {elapsed} days old, which is within the expected {freq.value.lower()} refresh interval."
+            line4 = f"- As a result, the dataset is classified as Current and receives a freshness score of {round(score)}/100."
+        elif status == FreshnessStatus.AGING:
+            line3 = f"- The dataset is {elapsed} days old, which exceeds the expected {freq.value.lower()} refresh interval by {overdue} days."
+            line4 = f"- As a result, the dataset is classified as Aging and receives a freshness score of {round(score)}/100."
+        else:  # STALE
+            line3 = f"- The dataset is {elapsed} days old, which exceeds the expected {freq.value.lower()} refresh interval by {overdue} days."
+            line4 = f"- As a result, the dataset is classified as Stale and receives a freshness score of {round(score)}/100."
+
+        return f"{line1}\n{line2}\n{line3}\n{line4}"
 
     @staticmethod
     def _freshness_note(
         score: float, freq: UpdateFrequency, elapsed: int | None
     ) -> str:
         if elapsed is None:
-            return "Last update date unknown — cannot assess currency."
+            return (
+                "- Freshness could not be assessed due to missing update metadata.\n"
+                "- Confirm the dataset is still actively maintained before use."
+            )
         if score >= 90:
-            return f"Dataset is current. Update frequency ({freq.value}) is being met."
+            return (
+                "- Dataset is current and suitable for use in analysis.\n"
+                "- Continue monitoring for updates per the expected refresh schedule."
+            )
         if score >= 60:
             return (
-                f"Dataset is aging ({elapsed} days since last update). "
-                f"Expected frequency: {freq.value}."
+                "- This dataset may not reflect the most recent program conditions.\n"
+                "- Consider validating findings against more recent SSA publications or reports.\n"
+                "- Monitor for an updated release before relying on time-sensitive analysis."
             )
         return (
-            f"Dataset is stale ({elapsed} days since last update). "
-            f"Expected frequency: {freq.value}. "
-            "Consider filing a data refresh request with the SSA Open Data Program."
+            "- This dataset may not accurately reflect current program conditions.\n"
+            "- Consider validating findings against more recent SSA publications or reports.\n"
+            "- Consider requesting updated metadata from the SSA Open Data Program if this "
+            "dataset is required for policy or operational analysis."
         )

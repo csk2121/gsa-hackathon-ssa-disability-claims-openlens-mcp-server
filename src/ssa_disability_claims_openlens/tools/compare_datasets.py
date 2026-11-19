@@ -148,6 +148,14 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
     )
     def compare_datasets(dataset_ids: list[str]) -> dict:  # type: ignore[return]
         """Compare multiple datasets for shared dimensions and integration opportunities."""
+        if len(dataset_ids) < 2:
+            return {
+                "error": (
+                    "compare_datasets requires at least two dataset IDs. "
+                    f"Received {len(dataset_ids)}. "
+                    "Use discover_disability_datasets to find valid dataset IDs."
+                )
+            }
         try:
             inp = CompareDatasetsInput(dataset_ids=dataset_ids)
             catalog = get_catalog_service()

@@ -112,34 +112,74 @@ to evaluate SSA program equity, efficiency, and access.
 
 ## Architecture
 
+### Local / stdio Deployment
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                   MCP Client (AI Agent / Bob)                   │
 └──────────────────────────────┬──────────────────────────────────┘
                                │ stdio / MCP Protocol
 ┌──────────────────────────────▼──────────────────────────────────┐
-│              SSA Disability Claims OpenLens MCP Server           │
+│              SSA Disability Claims OpenLens MCP Server          │
 │                                                                  │
 │  ┌─────────────────────────────────────────────────────────┐    │
-│  │                       app.py (FastMCP)                   │    │
-│  │                                                          │    │
-│  │   7 Tools         3 Prompts         4 Resources          │    │
-│  └──────┬────────────────┬────────────────┬────────────────┘    │
-│         │                │                │                      │
-│  ┌──────▼──────┐  ┌──────▼──────┐  ┌──────▼──────┐             │
-│  │   services/  │  │  prompts/   │  │ resources/  │             │
-│  │             │  │             │  │             │              │
-│  │ catalog     │  │ advisor     │  │ datasets    │              │
-│  │ coverage    │  │ reviewer    │  │ framework   │              │
-│  │ analysis    │  │ evaluator   │  │ recs        │              │
-│  │ recommend.  │  └─────────────┘  └─────────────┘             │
-│  └──────┬──────┘                                               │
-│         │                                                       │
-│  ┌──────▼─────────────────────────────────────────────────┐    │
-│  │                  Dataset Adapters                        │    │
-│  │   StaticCatalogAdapter │ DataGovAdapter (live)           │    │
-│  └─────────────────────────────────────────────────────────┘    │
+│  │                       app.py (FastMCP)                  │    │
+│  │                                                         │    │
+│  │   7 Tools         3 Prompts         4 Resources         │    │
+│  └──────┬────────────────┬────────────────┬───────────────┘    │
+│         │                │                │                     │
+│  ┌──────▼──────┐  ┌──────▼──────┐  ┌──────▼──────┐            │
+│  │  services/  │  │  prompts/   │  │ resources/  │            │
+│  │             │  │             │  │             │             │
+│  │ catalog     │  │ advisor     │  │ datasets    │             │
+│  │ coverage    │  │ reviewer    │  │ framework   │             │
+│  │ analysis    │  │ evaluator   │  │ recs        │             │
+│  │ recommend.  │  └─────────────┘  └─────────────┘            │
+│  └──────┬──────┘                                              │
+│         │                                                      │
+│  ┌──────▼────────────────────────────────────────────────┐    │
+│  │                  Dataset Adapters                      │    │
+│  │   StaticCatalogAdapter │ DataGovAdapter (live)         │    │
+│  └───────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
+                    │                        │
+           SSA Open Data Portal         Data.gov API
+```
+
+### watsonx Orchestrate Deployment
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        End User                                 │
+│              (watsonx Orchestrate Agent Chat UI)                │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+┌──────────────────────────────▼──────────────────────────────────┐
+│                  watsonx Orchestrate Platform                   │
+│                                                                  │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │               ssa_openlens_agent (native)                 │  │
+│  │   LLM: watsonx/meta-llama/llama-3-3-70b-instruct          │  │
+│  │   Style: react_core  │  hide_reasoning: true              │  │
+│  └──────────────────────────────┬────────────────────────────┘  │
+│                                 │ MCP tool calls                 │
+│  ┌──────────────────────────────▼────────────────────────────┐  │
+│  │          ssa-disability-claims-openlens (toolkit)         │  │
+│  │                                                           │  │
+│  │  discover_disability_datasets                             │  │
+│  │  explain_dataset                                          │  │
+│  │  compare_datasets                                         │  │
+│  │  analyze_dataset_completeness                             │  │
+│  │  assess_dataset_freshness                                 │  │
+│  │  evaluate_answer_coverage                                 │  │
+│  │  recommend_transparency_improvements                      │  │
+│  └──────────────────────────────┬────────────────────────────┘  │
+└─────────────────────────────────┼───────────────────────────────┘
+                                  │ MCP stdio
+┌─────────────────────────────────▼───────────────────────────────┐
+│              SSA Disability Claims OpenLens MCP Server          │
+│                        (python main.py)                         │
+└─────────────────────────────────┬───────────────────────────────┘
                     │                        │
            SSA Open Data Portal         Data.gov API
 ```
@@ -187,10 +227,21 @@ Evaluate a dataset's geographic, temporal, and operational coverage. Returns a s
 ---
 
 ### `assess_dataset_freshness`
-Evaluate how current a dataset is relative to its stated update frequency.
+Evaluate how current a dataset is relative to its stated update frequency. Returns a structured freshness report with six sections:
+
+| Section | Description |
+|---------|-------------|
+| **Summary Table** | Dataset ID, last updated, update frequency, days since update, freshness score (0–100), status |
+| **Freshness Rationale** | Deterministic natural-language explanation of why the status and score were assigned |
+| **Staleness Indicators** | Specific flags triggered by the dataset's age |
+| **Analyst Notes** | Action-oriented guidance for the analyst based on the freshness status |
+| **Assessment Note** | Disclaimer clarifying scores are based on catalog metadata, not a live SSA source query |
+
+**Freshness statuses:** Current | Aging | Stale | Unknown
 
 **Example prompts:**
 - *"Is the ODAR Pending Cases dataset up to date?"*
+- *"Assess the freshness of the SSA Disability Research Statistics dataset"*
 - *"How stale is the disability applications dataset?"*
 
 ---
@@ -219,13 +270,9 @@ Generate prioritized, actionable recommendations for improving SSA public data t
 
 ---
 
-## Quick Start
+## Deployment
 
-### Prerequisites
-- Python 3.12+
-- pip
-
-### Installation
+### Local (stdio)
 
 ```bash
 # Clone the repository
@@ -241,13 +288,42 @@ pip install -e ".[dev]"
 
 # Copy environment config
 cp .env.example .env
-```
 
-### Run the server
-
-```bash
+# Run the server
 python main.py
 ```
+
+### watsonx Orchestrate
+
+Requires the [watsonx Orchestrate ADK CLI](https://developer.watson-orchestrate.ibm.com/getting_started/installing) (`orchestrate`).
+
+```bash
+# 1. Add and activate your environment
+orchestrate env add --name <env-name> --url <instance-url> --type ibm_iam
+orchestrate env activate <env-name> --api-key <ibm-cloud-api-key>
+
+# 2. Import the MCP toolkit
+orchestrate toolkits add \
+  --kind mcp \
+  --name ssa-disability-claims-openlens \
+  --description "SSA Disability Claims OpenLens MCP server" \
+  --package-root . \
+  --command "python main.py" \
+  --tools "*"
+
+# 3. Import the agent
+orchestrate agents import -f deploy/agent.yaml
+```
+
+The agent (`ssa_openlens_agent`) will be available immediately in the watsonx Orchestrate Agent Chat UI.
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Python 3.12+
+- pip
 
 ### Run tests
 
@@ -286,6 +362,10 @@ See [`.env.example`](.env.example) for all configuration options. The server run
 ├── manifest.yaml                    # MCP server manifest
 ├── server.json                      # MCP registration config
 │
+├── deploy/
+│   ├── agent.yaml                   # watsonx Orchestrate agent definition
+│   └── requirements.txt             # Minimal runtime dependencies for deployment
+│
 ├── src/ssa_disability_claims_openlens/
 │   ├── app.py                       # FastMCP app factory (wires everything)
 │   ├── config.py                    # Settings from environment variables
@@ -296,7 +376,7 @@ See [`.env.example`](.env.example) for all configuration options. The server run
 │   ├── tools/                       # 7 MCP tools
 │   ├── prompts/                     # 3 MCP prompts
 │   ├── resources/                   # 4 MCP resources
-│   └── services/                    # Business logic (services)
+│   └── services/                    # Business logic
 │       ├── dataset_catalog_service.py
 │       ├── answer_coverage_service.py
 │       ├── dataset_analysis_service.py
@@ -333,6 +413,15 @@ Measures how certain the engine is about the **quality of its own analysis** —
 | Relevant datasets found but weak evidence (Limited) | **Medium** |
 | Relevant datasets found + clear gaps identified (Partial) | **High** |
 | Relevant datasets found + multiple corroborating datasets (High / Complete) | **High** |
+
+### Freshness Statuses
+
+| Status | Meaning |
+|--------|---------|
+| Current | Dataset is within its expected refresh interval |
+| Aging | Dataset has exceeded its refresh interval by up to 50% |
+| Stale | Dataset has significantly exceeded its refresh interval |
+| Unknown | Last update date is unavailable — freshness cannot be assessed |
 
 ---
 

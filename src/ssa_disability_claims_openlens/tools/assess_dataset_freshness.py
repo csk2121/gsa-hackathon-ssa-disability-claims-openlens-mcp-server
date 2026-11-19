@@ -23,11 +23,13 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
     @mcp.tool(
         name="assess_dataset_freshness",
         description=(
-            "Evaluates how current an SSA disability dataset is relative to its stated "
-            "update frequency. Returns a freshness score (0–100), qualitative status "
-            "(Current / Aging / Stale / Unknown), days since last update, and staleness "
-            "indicators. Use this tool before relying on a dataset for time-sensitive "
-            "analysis to understand whether the data reflects recent conditions."
+            "Catalog Freshness Assessment: evaluates how current an SSA disability dataset "
+            "is relative to its stated update frequency, based on metadata maintained in "
+            "the OpenLens catalog. Returns a freshness score (0–100), qualitative status "
+            "(Current / Aging / Stale / Unknown), days since last update, staleness "
+            "indicators, and an assessment note clarifying that scores reflect catalog "
+            "metadata — not a live query to the SSA data source. Use this tool before "
+            "relying on a dataset for time-sensitive analysis."
         ),
     )
     def assess_dataset_freshness(dataset_id: str) -> dict:  # type: ignore[return]

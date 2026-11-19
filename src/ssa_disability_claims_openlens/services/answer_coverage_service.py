@@ -40,9 +40,12 @@ from ..models import (
     GapAnalysis,
     InformationElement,
     IntentAnalysis,
-    RecommendationItem,
+    Recommendation,
 )
+from ..services.recommendation_service import RecommendationService
 from ..utils import extract_keywords, get_logger, score_to_coverage_rating
+
+_recommendation_service = RecommendationService()
 
 logger = get_logger(__name__)
 
@@ -383,89 +386,6 @@ _INTENT_KB: list[_IntentEntry] = [
 ]
 
 
-# ── Structured recommendation knowledge base ───────────────────────────────────
-# Maps missing information element names → list of RecommendationItem-like dicts.
-# Each entry directly addresses the named gap with a category and justification.
-
-_STRUCTURED_REC_KB: dict[str, list[dict]] = {
-    "Field office operational metrics (staffing, volume, wait times)": [
-        dict(text="Publish monthly field office visit volumes and appointment counts",
-             category="Operational Metrics",
-             justification="Without visit volume data, it is impossible to rank offices by demand or identify where resources are insufficient."),
-        dict(text="Publish staffing FTE counts by field office",
-             category="Operational Metrics",
-             justification="Staffing data combined with visit volumes would reveal offices where caseload-per-staff ratios indicate service strain."),
-        dict(text="Publish average appointment wait times by field office",
-             category="Access Data",
-             justification="Wait times are the most direct indicator of service accessibility and demand pressure at the office level."),
-        dict(text="Publish office service-capacity metrics (capacity utilisation, peak demand periods)",
-             category="Operational Metrics",
-             justification="Capacity metrics enable evidence-based decisions about resource reallocation and new office openings."),
-    ],
-    "Field office appointment and walk-in volume": [
-        dict(text="Publish monthly walk-in and appointment visit volumes by field office",
-             category="Access Data",
-             justification="Visit volumes are the foundational metric for measuring service demand and identifying access pressure points."),
-        dict(text="Publish the percentage of visitors served within 30 and 60 minutes",
-             category="Access Data",
-             justification="Time-to-service benchmarks translate volume data into a meaningful access equity indicator."),
-    ],
-    "SSA office staffing levels": [
-        dict(text="Publish annual FTE staffing levels by field office and hearing office",
-             category="Operational Metrics",
-             justification="Staffing counts are needed to compute caseload ratios and explain processing time disparities across offices."),
-        dict(text="Report adjudicator-to-caseload ratios alongside pending case counts",
-             category="Operational Metrics",
-             justification="Ratios contextualise raw pending case numbers — a large backlog at a large office may be less severe than a smaller backlog at an understaffed one."),
-    ],
-    "Office workload and capacity": [
-        dict(text="Publish monthly caseload-to-staff ratios for field offices and hearing offices",
-             category="Operational Metrics",
-             justification="Caseload ratios are the standard workload measure and would directly answer questions about which offices are under the most pressure."),
-        dict(text="Report hearing office disposition targets and actuals side-by-side",
-             category="Performance",
-             justification="Target-vs-actual comparison reveals whether offices are meeting workload commitments, not just reporting raw counts."),
-    ],
-    "Race and ethnicity data": [
-        dict(text="Publish disability application, award, and denial rates disaggregated by race and ethnicity",
-             category="Demographic Data",
-             justification="Race/ethnicity breakdowns are the minimum required to assess whether the disability adjudication process produces equitable outcomes."),
-        dict(text="Report race/ethnicity data at all levels of the appeals process (initial, reconsideration, hearing)",
-             category="Demographic Data",
-             justification="Disparities may emerge or widen at specific decision levels; publishing at each level pinpoints where intervention is needed."),
-        dict(text="Partner with the Census Bureau to link disability outcomes to demographic survey data",
-             category="Demographic Data",
-             justification="Linked data would enable analysis of socioeconomic context alongside program outcomes, supporting richer equity research."),
-    ],
-    "Applicant income and economic status": [
-        dict(text="Publish SSI application and outcome data cross-tabulated with income decile",
-             category="Program Outcomes",
-             justification="SSI is a means-tested program; without income data it is impossible to evaluate whether the program reaches its intended population."),
-        dict(text="Report geographic correlation of benefit amounts with local cost of living",
-             category="Finance",
-             justification="A fixed federal benefit has very different purchasing power across regions; this analysis requires both benefit and cost-of-living data."),
-    ],
-    "Work incentive program participation and outcomes": [
-        dict(text="Publish annual Ticket to Work assignment and return-to-work outcome statistics",
-             category="Program Outcomes",
-             justification="Participation counts without outcomes cannot demonstrate whether work incentive programs achieve their goal of reducing benefit dependency."),
-        dict(text="Report earnings outcomes for beneficiaries using Trial Work Period provisions",
-             category="Program Outcomes",
-             justification="Earnings data would show whether the Trial Work Period is functioning as a bridge to employment or is primarily used without sustained work."),
-    ],
-    "Hearing-level wait times": [
-        dict(text="Publish wait-time distributions (median, 90th percentile) alongside averages for hearing offices",
-             category="Temporal Granularity",
-             justification="Averages mask severe outliers; distributional data exposes the worst-case experience for claimants waiting the longest."),
-    ],
-    "Disability claim processing times": [
-        dict(text="Publish state-level initial claim processing times disaggregated from national averages",
-             category="Geographic Detail",
-             justification="National averages conceal large state-level variation; state-level data would enable geographic equity analysis of initial claim timelines."),
-    ],
-}
-
-
 # ── Scoring logic ──────────────────────────────────────────────────────────────
 
 _QUALITY_SCORE: dict[str, float] = {
@@ -645,52 +565,6 @@ class AnswerCoverageEngine:
             impact_on_answer=impact,
         )
 
-    # ── Step 6: Structured recommendations ────────────────────────────────────
-
-    def _build_structured_recommendations(
-        self, elements: list[InformationElement]
-    ) -> list[RecommendationItem]:
-        """
-        Build RecommendationItems that are directly tied to identified gaps.
-
-        Only elements that are missing or only partially/proxy covered generate
-        recommendations. Each item names the gap it closes, its category, and
-        a justification — so the report is self-explaining.
-        """
-        items: list[RecommendationItem] = []
-        seen_texts: set[str] = set()
-
-        for el in elements:
-            if el.coverage_quality in ("None", "Partial", "Proxy"):
-                for rec_dict in _STRUCTURED_REC_KB.get(el.element, []):
-                    text = rec_dict["text"]
-                    if text not in seen_texts:
-                        items.append(RecommendationItem(
-                            text=text,
-                            closes_gap=el.element,
-                            category=rec_dict["category"],
-                            justification=rec_dict["justification"],
-                        ))
-                        seen_texts.add(text)
-
-        # Fallback for gaps with no specific KB entry
-        for el in elements:
-            if el.coverage_quality == "None" and el.element not in _STRUCTURED_REC_KB:
-                fallback = f"Publish data covering: {el.element}"
-                if fallback not in seen_texts:
-                    items.append(RecommendationItem(
-                        text=fallback,
-                        closes_gap=el.element,
-                        category="Program Outcomes",
-                        justification=(
-                            f"This information element is entirely absent from public data "
-                            f"and is required to answer questions about {el.element.lower()}."
-                        ),
-                    ))
-                    seen_texts.add(fallback)
-
-        return items[:8]  # Cap at 8 to keep the report actionable
-
     # ── Main evaluate ──────────────────────────────────────────────────────────
 
     def evaluate(self, question: str) -> AnswerCoverageAssessment:
@@ -802,10 +676,10 @@ class AnswerCoverageEngine:
             available_data_with_sources = sorted(display_dataset_ids)
             available_data_with_urls = [{"name": did, "url": ""} for did in sorted(display_dataset_ids)]
 
-        # 7. Gap analysis and recommendations
+        # 7. Gap analysis and recommendations — both sourced from RecommendationService
         gap_analysis = self._build_gap_analysis(elements, question)
-        structured_recs = self._build_structured_recommendations(elements)
-        plain_recs = [r.text for r in structured_recs]
+        structured_recs: list[Recommendation] = _recommendation_service.for_gaps(elements)
+        plain_recs = [r.title for r in structured_recs]
 
         # 8. Floor rule: Unsupported → Limited when domain context was found.
         #

@@ -193,7 +193,7 @@ class CompletenessAnalysis(BaseModel):
 
 
 class FreshnessAssessment(BaseModel):
-    """Dataset update currency evaluation."""
+    """Catalog Freshness Assessment — evaluates dataset currency based on catalog metadata."""
 
     dataset_id: str
     dataset_name: str
@@ -202,8 +202,17 @@ class FreshnessAssessment(BaseModel):
     days_since_update: Optional[int]
     freshness_score: float = Field(ge=0.0, le=100.0)
     freshness_status: FreshnessStatus
+    freshness_rationale: str
     staleness_indicators: list[str]
     analyst_notes: str
+    assessment_note: str = Field(
+        default=(
+            "Freshness calculations are based on the dataset metadata currently "
+            "maintained within the OpenLens catalog. They reflect the last_updated "
+            "date recorded in the catalog, not a live query to the SSA data source."
+        ),
+        description="Disclaimer clarifying that freshness is measured from catalog metadata, not a live source check.",
+    )
 
 
 # ── Answer Coverage models ─────────────────────────────────────────────────────
@@ -264,23 +273,38 @@ class GapAnalysis(BaseModel):
     impact_on_answer: str = Field(description="How the gaps affect answer quality")
 
 
-class RecommendationItem(BaseModel):
+class Recommendation(BaseModel):
     """
-    A single transparency recommendation tied directly to a missing information gap.
+    A single transparency recommendation — the unified model used by both
+    evaluate_answer_coverage and recommend_transparency_improvements.
 
-    Each recommendation names the gap it closes, the category it belongs to,
-    and a one-sentence justification explaining why publishing this data matters.
+    Every recommendation originates from RecommendationService so both tools
+    return identical, deterministic results for the same input.
     """
 
-    text: str = Field(description="The actionable recommendation")
+    title: str = Field(description="Short action title for the recommendation")
     closes_gap: str = Field(description="The missing information element this recommendation addresses")
     category: str = Field(
         description=(
             "Recommendation category: Operational Metrics | Demographic Data | "
-            "Geographic Detail | Temporal Granularity | Program Outcomes | Access Data"
+            "Geographic Detail | Temporal Granularity | Program Outcomes | Access Data | "
+            "Performance | Finance"
         )
     )
     justification: str = Field(description="Why publishing this data would improve public understanding")
+    priority: RecommendationPriority = Field(description="High | Medium | Low")
+    affected_datasets: list[str] = Field(
+        default_factory=list,
+        description="Existing dataset IDs this recommendation would extend or complement",
+    )
+    expected_impact: str = Field(
+        default="",
+        description="Expected public benefit once this data is published",
+    )
+
+
+# Keep a backward-compatible alias so any external code using RecommendationItem still works.
+RecommendationItem = Recommendation
 
 
 class AnswerCoverageAssessment(BaseModel):
@@ -325,12 +349,16 @@ class AnswerCoverageAssessment(BaseModel):
         description="Information needed but not found in any public dataset"
     )
     gap_analysis: GapAnalysis
-    structured_recommendations: list[RecommendationItem] = Field(
+    structured_recommendations: list[Recommendation] = Field(
         default_factory=list,
-        description="Recommendations with gap linkage, category, and justification",
+        description=(
+            "Unified Recommendation objects from RecommendationService. "
+            "Each has title, closes_gap, category, justification, priority, "
+            "affected_datasets, and expected_impact."
+        ),
     )
     transparency_recommendations: list[str] = Field(
-        description="Actionable recommendations to close identified gaps (plain text)"
+        description="Plain-text recommendation titles (derived from structured_recommendations)"
     )
     potential_impact: str = Field(
         description="Expected public benefit if gaps are closed"
@@ -367,13 +395,18 @@ class AnswerCoverageAssessment(BaseModel):
         return "High"
 
     def format_report(self) -> str:
-        """Return a human-readable OpenLens Assessment report."""
+        """
+        Return a human-readable OpenLens Assessment report.
+
+        Uses ATX headings (## / ###) throughout — these are unambiguous in every
+        markdown renderer and cannot be accidentally merged or dropped by an LLM
+        reproducing the text, unlike underline-style headings (--- / ===).
+        """
         lines: list[str] = [
-            "SSA Disability Claims OpenLens Assessment",
-            "===================================",
+            "# SSA Disability Claims OpenLens Assessment",
             "",
-            "Question",
-            "--------",
+            "## Question",
+            "",
             self.question,
             "",
         ]
@@ -381,8 +414,8 @@ class AnswerCoverageAssessment(BaseModel):
         # Intent block — only shown when intent was successfully extracted
         if self.intent:
             lines += [
-                "Intent",
-                "------",
+                "## Intent",
+                "",
                 f"**Primary intent**: {self.intent.primary_intent}  ",
                 f"**Category**: {self.intent.intent_category}  ",
                 f"**Scope**: {self.intent.scope}  ",
@@ -391,16 +424,16 @@ class AnswerCoverageAssessment(BaseModel):
             ]
 
         lines += [
-            "Answer Coverage",
-            "---------------",
+            "## Answer Coverage",
+            "",
             f"**{self.coverage_rating.value}**",
             "",
-            "Assessment Confidence",
-            "---------------------",
+            "## Assessment Confidence",
+            "",
             f"**{self._confidence_label()}**",
             "",
-            "Available Data",
-            "--------------",
+            "## Available Data",
+            "",
         ]
         if self.available_data_with_urls:
             # Markdown pipe table — renders correctly in any proportional-font renderer
@@ -416,31 +449,33 @@ class AnswerCoverageAssessment(BaseModel):
                 if not item.startswith("Source datasets:")
             ]
             for item in display_available:
-                lines.append(f"\u2713 {item}")
+                lines.append(f"- {item}")
 
         if self.available_data_context_note:
             lines.append(f"\n{self.available_data_context_note}")
 
         lines += [
             "",
-            "Missing Information",
-            "-------------------",
+            "## Missing Information",
+            "",
         ]
         for item in self.missing_information:
             lines.append(f"- {item}")
 
         lines += [
             "",
-            "Gap Analysis",
-            "------------",
+            "## Gap Analysis",
+            "",
         ]
         if self.gap_analysis.critical_gaps:
             lines.append("**Critical gaps** (data not publicly available):")
+            lines.append("")
             for g in self.gap_analysis.critical_gaps:
                 lines.append(f"- {g}")
             lines.append("")
         if self.gap_analysis.partial_gaps:
             lines.append("**Partial gaps** (data exists but incomplete):")
+            lines.append("")
             for g in self.gap_analysis.partial_gaps:
                 lines.append(f"- {g}")
             lines.append("")
@@ -448,30 +483,28 @@ class AnswerCoverageAssessment(BaseModel):
 
         # Structured recommendations grouped by category
         if self.structured_recommendations:
-            lines += ["", "Transparency Recommendations", "----------------------------"]
+            lines += ["", "## Transparency Recommendations", ""]
             # Group by category preserving insertion order
-            by_category: dict[str, list[RecommendationItem]] = {}
+            by_category: dict[str, list[Recommendation]] = {}
             for r in self.structured_recommendations:
                 by_category.setdefault(r.category, []).append(r)
             for category, recs in by_category.items():
-                lines.append(f"\n**[{category}]**")
+                lines.append(f"### {category}")
+                lines.append("")
                 for idx, r in enumerate(recs, start=1):
-                    # Two trailing spaces before \n produce a <br> hard line break in
-                    # every markdown renderer — the only approach that guarantees each
-                    # label appears on its own line without triggering list renumbering
-                    # or paragraph merging.
-                    lines.append(f"\n{idx}. {r.text}  ")
-                    lines.append(f"   **Closes gap**: {r.closes_gap}  ")
-                    lines.append(f"   **Justification**: {r.justification}")
+                    lines.append(f"{idx}. {r.title}")
+                    lines.append(f"   - **Closes gap**: {r.closes_gap}")
+                    lines.append(f"   - **Justification**: {r.justification}")
+                    lines.append("")
         else:
-            lines += ["", "Transparency Recommendations", "----------------------------"]
+            lines += ["", "## Transparency Recommendations", ""]
             for idx, rec in enumerate(self.transparency_recommendations, start=1):
                 lines.append(f"{idx}. {rec}")
 
         lines += [
             "",
-            "Potential Impact",
-            "----------------",
+            "## Potential Impact",
+            "",
             self.potential_impact,
         ]
         return "\n".join(lines)
@@ -480,28 +513,16 @@ class AnswerCoverageAssessment(BaseModel):
 # ── Recommendation models ──────────────────────────────────────────────────────
 
 
-class TransparencyRecommendation(BaseModel):
-    """A single actionable transparency improvement recommendation."""
-
-    title: str
-    description: str
-    affected_datasets: list[str]
-    new_data_elements: list[str] = Field(
-        default_factory=list,
-        description="New fields or metrics that should be published",
-    )
-    expected_impact: str
-    priority: RecommendationPriority
-    implementation_effort: str = Field(
-        description="Low | Medium | High estimated effort to implement"
-    )
+# TransparencyRecommendation is now an alias for the unified Recommendation model.
+# This preserves backward compatibility with any code that imports TransparencyRecommendation.
+TransparencyRecommendation = Recommendation
 
 
 class TransparencyImprovementPlan(BaseModel):
-    """Full set of prioritized transparency recommendations."""
+    """Full set of prioritized transparency recommendations from RecommendationService."""
 
     context: str = Field(description="Question or topic that motivated the recommendations")
-    recommendations: list[TransparencyRecommendation]
+    recommendations: list[Recommendation]
     total_recommendations: int
     high_priority_count: int
     executive_summary: str

@@ -75,10 +75,10 @@ class TestRecommendTransparencyImprovements:
         )
         for rec in plan.recommendations:
             assert rec.title, "Recommendation must have a title"
-            assert rec.description, "Recommendation must have a description"
+            assert rec.closes_gap, "Recommendation must have closes_gap"
+            assert rec.justification, "Recommendation must have a justification"
             assert rec.expected_impact, "Recommendation must have expected_impact"
             assert rec.priority in RecommendationPriority.__members__.values()
-            assert rec.implementation_effort in ("Low", "Medium", "High")
 
     def test_executive_summary_generated(
         self, recommendation_service: RecommendationService

@@ -231,7 +231,7 @@ _STATIC_CATALOG: list[dict[str, Any]] = [
         "source": DataSource.SSA_OPEN_DATA,
         "update_frequency": UpdateFrequency.ANNUALLY,
         "url": "https://www.ssa.gov/policy/docs/statcomps/disabled_workers/",
-        "tags": ["SSDI", "demographics", "age", "gender", "earnings", "beneficiary characteristics"],
+        "tags": ["SSDI", "disability claims", "disability statistics", "demographics", "age", "gender", "earnings", "beneficiary characteristics"],
         "last_updated": date(2024, 2, 1),
         "purpose": (
             "Provides demographic profile of SSDI beneficiaries. "
