@@ -374,23 +374,26 @@ class AnswerCoverageAssessment(BaseModel):
 
     def _confidence_label(self) -> str:
         """
-        Derive an Assessment Confidence label from the coverage rating.
+        Derive an Assessment Confidence label from the coverage rating and
+        evidence quality.
 
         This measures the engine's certainty about its own analysis — not how
         much data SSA has published (that is what Answer Coverage captures).
 
         Low    — No relevant datasets found (Unsupported). The engine could not
                  map the question to any known SSA domain.
-        Medium — Relevant datasets found but weak evidence (Limited). The engine
-                 identified the domain and gaps, but direct supporting datasets
-                 are mostly absent; analysis rests on context data only.
-        High   — Relevant datasets found with clear gaps identified (Partial),
-                 OR multiple corroborating datasets found (High / Complete).
-                 The engine produced a fully grounded analysis.
+        Medium — Limited coverage AND no direct element-matched datasets found;
+                 analysis rests entirely on context datasets with no partial
+                 or proxy coverage. The engine identified the domain but has
+                 weak grounding.
+        High   — Intent identified, missing information enumerated, and
+                 recommendations generated (even if coverage is Limited).
+                 The engine produced a fully grounded analysis — the
+                 uncertainty is in the missing data, not in the assessment.
         """
         if self.coverage_rating == CoverageRating.UNSUPPORTED:
             return "Low"
-        if self.coverage_rating == CoverageRating.LIMITED:
+        if self.coverage_rating == CoverageRating.LIMITED and not self.datasets_consulted:
             return "Medium"
         return "High"
 
@@ -481,21 +484,22 @@ class AnswerCoverageAssessment(BaseModel):
             lines.append("")
         lines.append(f"**Impact**: {self.gap_analysis.impact_on_answer}")
 
-        # Structured recommendations grouped by category
+        # Structured recommendations grouped by category, numbered globally
         if self.structured_recommendations:
             lines += ["", "## Transparency Recommendations", ""]
-            # Group by category preserving insertion order
             by_category: dict[str, list[Recommendation]] = {}
             for r in self.structured_recommendations:
                 by_category.setdefault(r.category, []).append(r)
+            global_idx = 1
             for category, recs in by_category.items():
-                lines.append(f"### {category}")
+                lines.append(f"**[{category}]**")
                 lines.append("")
-                for idx, r in enumerate(recs, start=1):
-                    lines.append(f"{idx}. {r.title}")
-                    lines.append(f"   - **Closes gap**: {r.closes_gap}")
-                    lines.append(f"   - **Justification**: {r.justification}")
+                for r in recs:
+                    lines.append(f"{global_idx}. {r.title}")
+                    lines.append(f"   **Closes gap**: {r.closes_gap}")
+                    lines.append(f"   **Justification**: {r.justification}")
                     lines.append("")
+                    global_idx += 1
         else:
             lines += ["", "## Transparency Recommendations", ""]
             for idx, rec in enumerate(self.transparency_recommendations, start=1):

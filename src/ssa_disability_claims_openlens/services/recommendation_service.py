@@ -455,6 +455,94 @@ _RECOMMENDATION_KB: list[dict] = [
             ),
         ],
     },
+    # ── Geographic accessibility / rural-urban equity ─────────────────────────
+    {
+        "topic": "geographic_accessibility",
+        "keywords": [
+            "rural", "urban", "geographic", "access", "accessibility", "underserved",
+            "service gap", "service desert", "county", "travel distance", "office coverage",
+            "regional", "equity", "disparity",
+        ],
+        "recommendations": [
+            Recommendation(
+                title="Publish travel distance to nearest SSA field office by ZIP code or county",
+                closes_gap="Travel distance to nearest SSA field office",
+                category="Geographic Detail",
+                justification=(
+                    "Travel distance is the most direct proxy for access burden. Without it, "
+                    "it is impossible to quantify whether rural communities face greater barriers "
+                    "to in-person SSA services than urban communities."
+                ),
+                priority=RecommendationPriority.HIGH,
+                affected_datasets=["ssa-field-office-locator"],
+                expected_impact=(
+                    "Would enable researchers to map access deserts and demonstrate where "
+                    "distance is a barrier to disability service participation."
+                ),
+            ),
+            Recommendation(
+                title="Publish SSA field office service area boundaries by county",
+                closes_gap="Field office service area boundaries",
+                category="Geographic Detail",
+                justification=(
+                    "Service area boundaries would allow cross-referencing of disability "
+                    "population density against office coverage — the foundational step for "
+                    "rural versus urban access analysis."
+                ),
+                priority=RecommendationPriority.HIGH,
+                affected_datasets=["ssa-field-office-locator"],
+                expected_impact=(
+                    "Enables county-level mapping of SSA coverage gaps and identifies "
+                    "communities with no accessible field office within a reasonable distance."
+                ),
+            ),
+            Recommendation(
+                title="Publish county-level disability beneficiary counts alongside field office locations",
+                closes_gap="Geographic distribution of disability service access",
+                category="Geographic Detail",
+                justification=(
+                    "Combining beneficiary density with office locations would reveal where "
+                    "SSA serves high-need populations well and where access lags population need."
+                ),
+                priority=RecommendationPriority.HIGH,
+                affected_datasets=["ssa-field-office-locator", "ssa-oasdi-beneficiaries-by-state", "ssa-ssi-recipients-by-state"],
+                expected_impact=(
+                    "Provides the evidence base needed to evaluate equitable distribution "
+                    "of SSA field office resources relative to disability population density."
+                ),
+            ),
+            Recommendation(
+                title="Publish average appointment wait times disaggregated by rural vs. urban office classification",
+                closes_gap="Field office operational metrics (staffing, volume, wait times)",
+                category="Access Data",
+                justification=(
+                    "Rural-urban classification of wait times would directly answer whether "
+                    "rural communities experience longer service delays than urban counterparts."
+                ),
+                priority=RecommendationPriority.HIGH,
+                affected_datasets=["ssa-field-office-locator"],
+                expected_impact=(
+                    "The most direct dataset needed to confirm or refute rural access disparity "
+                    "in SSA disability services."
+                ),
+            ),
+            Recommendation(
+                title="Publish ADA compliance status and accessibility accommodations for each field office",
+                closes_gap="Accessibility accommodations at field offices",
+                category="Access Data",
+                justification=(
+                    "Claimants with disabilities need to know whether offices are physically "
+                    "accessible before making the trip. This data is entirely absent from public records."
+                ),
+                priority=RecommendationPriority.MEDIUM,
+                affected_datasets=["ssa-field-office-locator"],
+                expected_impact=(
+                    "Would enable disability advocates to identify offices that may be "
+                    "inaccessible to the very population they serve."
+                ),
+            ),
+        ],
+    },
 ]
 
 

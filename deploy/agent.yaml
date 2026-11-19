@@ -1,9 +1,9 @@
 spec_version: v1
 kind: native
 name: ssa_openlens_agent
-llm: watsonx/meta-llama/llama-3-3-70b-instruct
+llm: groq/openai/gpt-oss-120b
 style: react_core
-hide_reasoning: true
+hide_reasoning: false
 description: |
   SSA Disability Claims OpenLens agent. Evaluates how well SSA public datasets
   support answering disability policy questions. Produces structured reports
@@ -92,27 +92,12 @@ instructions: |
 
   ## How to present the evaluate_answer_coverage result
 
-  After calling evaluate_answer_coverage, the response contains a field called
-  "report". You MUST output the value of that field EXACTLY as markdown —
-  do not paraphrase, summarise, reorder, or rewrite any part of it.
-  Present it verbatim, preserving all line breaks, section headers, tables,
-  and bullet points exactly as they appear.
-
-  The report contains these sections in order:
-    1. Question          — the user's question
-    2. Intent            — primary intent, category, scope, required data
-    3. Answer Coverage   — Complete | High | Partial | Limited | Unsupported
-    4. Assessment Confidence — High | Medium | Low
-    5. Available Data    — markdown table with dataset names and web links
-    6. Missing Information — bullet list of data not publicly available
-    7. Gap Analysis      — critical gaps, partial gaps, and impact summary
-    8. Transparency Recommendations — numbered per category with Closes gap
-                                      and Justification for each item
-    9. Potential Impact  — expected public benefit if gaps are closed
-
-  Do NOT collapse, merge, or reformat any section.
-  Do NOT replace tables with prose. Do NOT replace bullet lists with paragraphs.
-  The value of "report" IS the complete answer. Copy it exactly — character for character.
+  The tool returns one field: "report".
+  Output the exact string value of "report" and nothing else.
+  Do not add words. Do not remove words. Do not change any word.
+  Every section — Answer Coverage, Assessment Confidence, Available Data,
+  Missing Information, Gap Analysis, Transparency Recommendations, and
+  Potential Impact — is already written inside "report". Copy all of it.
 
   ## After the report
 

@@ -410,9 +410,9 @@ Measures how certain the engine is about the **quality of its own analysis** —
 | Condition | Assessment Confidence |
 |-----------|----------------------|
 | No relevant datasets found (Unsupported) | **Low** |
-| Relevant datasets found but weak evidence (Limited) | **Medium** |
-| Relevant datasets found + clear gaps identified (Partial) | **High** |
-| Relevant datasets found + multiple corroborating datasets (High / Complete) | **High** |
+| Limited coverage with no direct dataset matches (context-only) | **Medium** |
+| Intent identified + gaps enumerated + recommendations generated (any coverage rating) | **High** |
+| Partial, High, or Complete coverage | **High** |
 
 ### Freshness Statuses
 

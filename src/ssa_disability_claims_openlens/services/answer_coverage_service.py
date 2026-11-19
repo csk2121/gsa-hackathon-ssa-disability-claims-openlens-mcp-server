@@ -271,6 +271,70 @@ _COVERAGE_KB: list[_CoverageEntry] = [
         coverage_quality="Partial",
         weight=1,
     ),
+    # ── Accessibility / geographic equity ─────────────────────────────────────
+    _CoverageEntry(
+        patterns=[
+            r"rural", r"urban", r"geographic\s*equit", r"regional\s*dispar",
+            r"underserved", r"service\s*gap", r"service\s*desert", r"county\s*coverage",
+            r"office\s*coverage", r"less\s*access", r"access.*rural", r"rural.*access",
+        ],
+        element="Geographic distribution of disability service access",
+        description=(
+            "County- or region-level data showing where disability populations are located "
+            "relative to SSA office coverage, needed to compare rural and urban access"
+        ),
+        dataset_ids=[
+            "ssa-field-office-locator",
+            "ssa-oasdi-beneficiaries-by-state",
+            "ssa-ssi-recipients-by-state",
+        ],
+        coverage_quality="Partial",
+        weight=2,
+    ),
+    _CoverageEntry(
+        patterns=[
+            r"travel\s*distance", r"distance\s*to\s*(office|ssa)", r"nearest\s*office",
+            r"miles?\s*(to|from)\s*office", r"drive\s*time",
+        ],
+        element="Travel distance to nearest SSA field office",
+        description="Distance or travel time between claimant location and nearest field office",
+        dataset_ids=[],
+        coverage_quality="None",
+        weight=2,
+    ),
+    _CoverageEntry(
+        patterns=[
+            r"service\s*area\s*boundar", r"office\s*boundar", r"coverage\s*area",
+            r"catchment\s*area",
+        ],
+        element="Field office service area boundaries",
+        description="Defined geographic service areas for each SSA field office",
+        dataset_ids=[],
+        coverage_quality="None",
+        weight=1,
+    ),
+    _CoverageEntry(
+        patterns=[
+            r"accessib(ility|le)\s*(accommodation|feature|service)",
+            r"ada\s*compliance", r"disability\s*access(ib)?", r"physical\s*access",
+        ],
+        element="Accessibility accommodations at field offices",
+        description="ADA compliance status, language services, and physical accessibility features",
+        dataset_ids=[],
+        coverage_quality="None",
+        weight=1,
+    ),
+    _CoverageEntry(
+        patterns=[
+            r"disability.*application.*county", r"county.*application",
+            r"application.*geographic", r"geographic.*application",
+        ],
+        element="Disability application counts by county",
+        description="Number of disability applications disaggregated to county level",
+        dataset_ids=["ssa-disability-applications-decisions"],
+        coverage_quality="Proxy",
+        weight=1,
+    ),
 ]
 
 
@@ -381,6 +445,77 @@ _INTENT_KB: list[_IntentEntry] = [
         context_dataset_ids=[
             "ssa-red-book",
             "ssa-disability-applications-decisions",
+        ],
+    ),
+    # ── Accessibility ──────────────────────────────────────────────────────────
+    _IntentEntry(
+        patterns=[
+            r"rural.*access", r"access.*rural", r"urban.*rural",
+            r"rural.*urban", r"rural.*communit", r"rural.*disab",
+            r"geographic.*access", r"access.*geographic",
+            r"less\s*access", r"underserved.*communit",
+            r"service\s*desert", r"service\s*gap",
+            r"access\s*to\s*disab", r"disab.*access\s*to\s*service",
+        ],
+        category="Accessibility",
+        primary_intent_template=(
+            "Determine whether rural communities have less access to SSA disability services "
+            "than urban communities using available public datasets"
+        ),
+        required_data_types=[
+            "Field office locations",
+            "Disability population distribution",
+            "County-level beneficiary counts",
+            "Travel distance to nearest office",
+            "Appointment wait times by geography",
+        ],
+        scope="County and community level, national",
+        seed_elements=[
+            "Geographic distribution of disability service access",
+            "SSA field office locations and coverage",
+            "Travel distance to nearest SSA field office",
+            "Field office operational metrics (staffing, volume, wait times)",
+        ],
+        context_dataset_ids=[
+            "ssa-field-office-locator",
+            "ssa-ssi-recipients-by-state",
+            "ssa-oasdi-beneficiaries-by-state",
+            "ssa-disability-applications-decisions",
+            "ssa-odar-pending-cases",
+        ],
+    ),
+    # ── Geographic equity ──────────────────────────────────────────────────────
+    _IntentEntry(
+        patterns=[
+            r"geographic\s*equit", r"regional\s*dispar",
+            r"county.*dispar", r"dispar.*county",
+            r"geographic.*dispar", r"dispar.*geographic",
+            r"office\s*coverage", r"county\s*coverage",
+            r"underserved\s*area", r"underserved\s*region",
+        ],
+        category="Geographic Equity",
+        primary_intent_template=(
+            "Assess geographic equity in the distribution of SSA disability services "
+            "and identify underserved regions"
+        ),
+        required_data_types=[
+            "County-level beneficiary counts",
+            "Field office locations and service areas",
+            "Regional application and decision data",
+        ],
+        scope="County and regional level, national",
+        seed_elements=[
+            "Geographic distribution of disability service access",
+            "SSA field office locations and coverage",
+            "Field office service area boundaries",
+            "Geographic disaggregation of outcomes",
+        ],
+        context_dataset_ids=[
+            "ssa-field-office-locator",
+            "ssa-oasdi-beneficiaries-by-state",
+            "ssa-ssi-recipients-by-state",
+            "ssa-disability-applications-decisions",
+            "ssa-odar-pending-cases",
         ],
     ),
 ]
@@ -692,8 +827,28 @@ class AnswerCoverageEngine:
         if rating == CoverageRating.UNSUPPORTED and (intent is not None or structured_recs):
             rating = CoverageRating.LIMITED
 
-        # 9. Potential impact
-        if rating in (CoverageRating.UNSUPPORTED, CoverageRating.LIMITED):
+        # 9. Potential impact — intent-specific where available, generic fallback
+        intent_category = intent.intent_category.lower() if intent else ""
+        if intent_category in ("accessibility", "geographic equity", "access"):
+            potential_impact = (
+                "Publishing the recommended data elements would enable researchers and "
+                "policymakers to directly evaluate whether rural communities face greater "
+                "barriers to disability services than urban communities.\n\n"
+                "The additional data would support analysis of:\n"
+                "- Geographic disparities in service accessibility\n"
+                "- Travel burden to SSA field offices\n"
+                "- Appointment wait times by region\n"
+                "- Alignment of staffing resources with community demand\n"
+                "- Potential disability-service deserts and underserved areas\n\n"
+                "Implementing these recommendations would markedly improve public understanding "
+                "of SSA disability service accessibility. Stakeholders could identify geographic "
+                "and demographic disparities in service access, evaluate whether rural and "
+                "underserved communities face greater barriers to assistance, and advocate for "
+                "targeted service improvements. Greater transparency would strengthen "
+                "accountability, support evidence-based policymaking, and help ensure more "
+                "equitable access to disability benefits and services."
+            )
+        elif rating in (CoverageRating.UNSUPPORTED, CoverageRating.LIMITED):
             potential_impact = (
                 "Publishing the missing data elements would substantially improve public "
                 "ability to evaluate SSA program equity, efficiency, and access — enabling "

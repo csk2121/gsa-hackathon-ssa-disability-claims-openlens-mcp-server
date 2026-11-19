@@ -54,13 +54,12 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
                 f"rating={assessment.coverage_rating.value}"
             )
 
-            # Return only the fields the LLM needs.
-            # 'report' is the primary output — present it verbatim.
-            # The remaining fields are for programmatic routing only.
+            # Return only the report field.
+            # Returning additional fields (coverage_rating, datasets_consulted)
+            # gives the LLM content to paraphrase instead of copy.
+            # The report already contains all information the user needs.
             return {
                 "report": assessment.format_report(),
-                "coverage_rating": assessment.coverage_rating.value,
-                "datasets_consulted": assessment.datasets_consulted,
             }
         except Exception as exc:  # noqa: BLE001
             logger.error(f"evaluate_answer_coverage failed: {exc}")
