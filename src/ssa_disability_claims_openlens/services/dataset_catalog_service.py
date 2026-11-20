@@ -433,11 +433,19 @@ class DataGovAdapter(DatasetAdapter):
     Queries the Data.gov CKAN API for SSA disability datasets.
 
     Falls back gracefully when the network is unavailable.
+
+    Security: fetch_detail() only issues a network request for dataset IDs
+    that were previously returned by fetch_summaries() in the same process
+    lifetime. This prevents a caller from using an arbitrary dataset_id string
+    to probe the Data.gov API with attacker-controlled query parameters.
     """
 
     def __init__(self, base_url: str, api_key: str = "") -> None:
         self._base_url = base_url.rstrip("/")
         self._headers = {"X-CKAN-API-Key": api_key} if api_key else {}
+        # Allowlist of CKAN package names discovered via fetch_summaries().
+        # fetch_detail() refuses to query any name not in this set.
+        self._known_ckan_names: set[str] = set()
 
     def _search(self, query: str, rows: int = 20) -> list[dict[str, Any]]:
         try:
@@ -461,14 +469,17 @@ class DataGovAdapter(DatasetAdapter):
         summaries: list[DatasetSummary] = []
         for pkg in results:
             try:
+                ckan_name = pkg.get("name", "unknown")
+                # Register every name returned by the API as a known, safe ID.
+                self._known_ckan_names.add(ckan_name)
                 summaries.append(
                     DatasetSummary(
-                        dataset_id=f"datagov-{pkg.get('name', 'unknown')}",
+                        dataset_id=f"datagov-{ckan_name}",
                         name=pkg.get("title", "Untitled"),
                         description=pkg.get("notes", "No description available."),
                         source=DataSource.DATA_GOV,
                         update_frequency=UpdateFrequency.UNKNOWN,
-                        url=f"https://catalog.data.gov/dataset/{pkg.get('name', '')}",
+                        url=f"https://catalog.data.gov/dataset/{ckan_name}",
                         tags=[t.get("name", "") for t in pkg.get("tags", [])],
                         last_updated=None,
                     )
@@ -478,8 +489,20 @@ class DataGovAdapter(DatasetAdapter):
         return summaries
 
     def fetch_detail(self, dataset_id: str) -> DatasetDetail | None:
-        # Strip the "datagov-" prefix to get the CKAN package name
+        # Strip the "datagov-" prefix to get the CKAN package name.
         ckan_name = dataset_id.removeprefix("datagov-")
+
+        # Security: only issue a network request for names that were previously
+        # returned by the Data.gov API itself (via fetch_summaries). This prevents
+        # a caller from crafting an arbitrary dataset_id to probe the API with
+        # attacker-controlled query parameters.
+        if ckan_name not in self._known_ckan_names:
+            logger.warning(
+                f"DataGovAdapter.fetch_detail: '{ckan_name}' is not in the known "
+                "package allowlist — skipping network request."
+            )
+            return None
+
         try:
             url = f"{self._base_url}/package_show"
             with httpx.Client(timeout=10.0) as client:

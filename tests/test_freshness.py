@@ -111,3 +111,58 @@ class TestAssessDatasetFreshness:
         assessment = analysis_service.assess_freshness(detail)
         expected_days = (date.today() - detail.last_updated).days
         assert assessment.days_since_update == expected_days
+
+    def test_format_report_returns_complete_markdown(
+        self,
+        catalog_service: DatasetCatalogService,
+        analysis_service: DatasetAnalysisService,
+    ) -> None:
+        """format_report() should produce a single markdown string with all sections."""
+        detail = catalog_service.get_dataset_detail("ssa-disability-research-statistics")
+        assert detail is not None
+        assessment = analysis_service.assess_freshness(detail)
+        report = assessment.format_report()
+
+        # Must be a non-empty string
+        assert isinstance(report, str)
+        assert len(report) > 100
+
+        # Must contain the heading with dataset name
+        assert "## Freshness Assessment" in report
+        assert detail.name in report
+
+        # Must contain all table fields
+        assert "Dataset ID" in report
+        assert "Last Updated" in report
+        assert "Freshness Score" in report
+        assert "Status" in report
+
+        # Must contain all named sections
+        assert "Freshness Rationale:" in report
+        assert "Staleness Indicators:" in report
+        assert "Analyst Notes:" in report
+        assert "Note:" in report
+
+        # Must contain the freshness status value
+        assert assessment.freshness_status.value in report
+
+    def test_format_report_no_newline_collapsed_fields(
+        self,
+        catalog_service: DatasetCatalogService,
+        analysis_service: DatasetAnalysisService,
+    ) -> None:
+        """
+        Rationale and analyst notes must arrive as separate lines, not collapsed
+        into a single run-on sentence (the core formatting bug being fixed).
+        """
+        detail = catalog_service.get_dataset_detail("ssa-disability-research-statistics")
+        assert detail is not None
+        assessment = analysis_service.assess_freshness(detail)
+        report = assessment.format_report()
+
+        # The rationale contains bullet lines — there must be multiple lines
+        # starting with "- " in the report (from both rationale and notes sections)
+        bullet_lines = [line for line in report.splitlines() if line.startswith("- ")]
+        assert len(bullet_lines) >= 2, (
+            "Expected multiple bullet lines in report — formatting may have been collapsed"
+        )

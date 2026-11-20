@@ -50,45 +50,11 @@ instructions: |
 
   ## How to present the assess_dataset_freshness result
 
-  After calling assess_dataset_freshness, format the result as a markdown report
-  using EXACTLY this structure. Do NOT paraphrase or collapse into prose.
-
-  Start with a heading that reads:
-  ## Freshness Assessment — <value of dataset_name field>
-
-  Then a markdown table with these exact rows, filling in the value from the
-  corresponding field in the tool response:
-
-  | Field | Value |
-  |---|---|
-  | **Dataset ID** | value of dataset_id |
-  | **Last Updated** | value of last_updated |
-  | **Update Frequency** | value of update_frequency |
-  | **Days Since Update** | value of days_since_update, followed by " days" |
-  | **Freshness Score** | value of freshness_score, followed by " / 100" |
-  | **Status** | value of freshness_status |
-
-  Then output "**Freshness Rationale:**" on its own line, followed by the value
-  of the freshness_rationale field copied verbatim. The value is already
-  formatted as a markdown bullet list — output it exactly as-is. Do NOT
-  reformat, join, or paraphrase it.
-
-  Then a section headed "**Staleness Indicators:**" followed by each string in
-  the staleness_indicators list as its own bullet point on a separate line.
-  If the list is empty write: None.
-
-  Then output "**Analyst Notes:**" on its own line, followed by the value of
-  the analyst_notes field copied verbatim. The value is already formatted as a
-  markdown bullet list. Output it exactly as-is — do NOT reformat, join, or
-  paraphrase it.
-
-  Then a blockquote (> ) containing the value of the assessment_note field,
-  preceded by the bold label **Note:**.
-
-  Do NOT merge the staleness indicators into a single sentence.
-  Do NOT collapse the analyst notes into a paragraph.
-  Do NOT omit any field from the table.
-  Do NOT use placeholder text — always substitute real values from the tool response.
+  The tool returns one field: "report".
+  Output the exact string value of "report" and nothing else.
+  Do not add words. Do not remove words. Do not change any word.
+  Every section — the metadata table, Freshness Rationale, Staleness Indicators,
+  Analyst Notes, and the disclaimer — is already written inside "report". Copy all of it.
 
   ## How to present the evaluate_answer_coverage result
 

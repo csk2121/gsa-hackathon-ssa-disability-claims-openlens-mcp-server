@@ -214,6 +214,48 @@ class FreshnessAssessment(BaseModel):
         description="Disclaimer clarifying that freshness is measured from catalog metadata, not a live source check.",
     )
 
+    def format_report(self) -> str:
+        """
+        Return a human-readable Freshness Assessment report.
+
+        Uses the same markdown conventions as AnswerCoverageAssessment.format_report()
+        so that the LLM instruction for both tools is identical: copy the report verbatim.
+        """
+        lines: list[str] = [
+            f"## Freshness Assessment — {self.dataset_name}",
+            "",
+            "| Field | Value |",
+            "|---|---|",
+            f"| **Dataset ID** | {self.dataset_id} |",
+            f"| **Last Updated** | {self.last_updated if self.last_updated else 'Unknown'} |",
+            f"| **Update Frequency** | {self.update_frequency.value} |",
+            f"| **Days Since Update** | {self.days_since_update if self.days_since_update is not None else 'Unknown'} days |",
+            f"| **Freshness Score** | {round(self.freshness_score)} / 100 |",
+            f"| **Status** | {self.freshness_status.value} |",
+            "",
+            "**Freshness Rationale:**",
+            "",
+            self.freshness_rationale,
+            "",
+            "**Staleness Indicators:**",
+            "",
+        ]
+        if self.staleness_indicators:
+            for indicator in self.staleness_indicators:
+                lines.append(f"- {indicator}")
+        else:
+            lines.append("None")
+
+        lines += [
+            "",
+            "**Analyst Notes:**",
+            "",
+            self.analyst_notes,
+            "",
+            f"> **Note:** {self.assessment_note}",
+        ]
+        return "\n".join(lines)
+
 
 # ── Answer Coverage models ─────────────────────────────────────────────────────
 

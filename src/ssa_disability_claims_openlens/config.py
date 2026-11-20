@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Settings(BaseModel):
@@ -32,6 +32,28 @@ class Settings(BaseModel):
         default="https://catalog.data.gov/api/3/action"
     )
     data_gov_api_key: str = Field(default="")
+
+    @field_validator("data_gov_api_base_url")
+    @classmethod
+    def validate_data_gov_url(cls, v: str) -> str:
+        """
+        Reject any base URL that does not point to the official Data.gov CKAN API.
+
+        This eliminates the SSRF path where a compromised environment variable
+        redirects outbound requests to an internal endpoint (e.g. cloud metadata
+        service at 169.254.169.254, or a private network host).
+
+        The URL must start with 'https://catalog.data.gov/' — no other host,
+        no HTTP (downgrade), no IP literals.
+        """
+        _ALLOWED_PREFIX = "https://catalog.data.gov/"
+        if not v.startswith(_ALLOWED_PREFIX):
+            raise ValueError(
+                f"data_gov_api_base_url must start with '{_ALLOWED_PREFIX}'. "
+                f"Got: {v!r}. Set DATA_GOV_API_BASE_URL to an allowed value "
+                "or leave it unset to use the default."
+            )
+        return v
 
     # ── Cache settings ─────────────────────────────────────────────────────────
     catalog_cache_ttl_seconds: int = Field(default=3600)

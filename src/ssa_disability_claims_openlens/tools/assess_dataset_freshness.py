@@ -25,15 +25,19 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
         description=(
             "Catalog Freshness Assessment: evaluates how current an SSA disability dataset "
             "is relative to its stated update frequency, based on metadata maintained in "
-            "the OpenLens catalog. Returns a freshness score (0–100), qualitative status "
-            "(Current / Aging / Stale / Unknown), days since last update, staleness "
-            "indicators, and an assessment note clarifying that scores reflect catalog "
-            "metadata — not a live query to the SSA data source. Use this tool before "
-            "relying on a dataset for time-sensitive analysis."
+            "the OpenLens catalog. Returns a pre-formatted assessment report in the 'report' "
+            "field. IMPORTANT: Always present the value of 'report' verbatim to the user — "
+            "do not paraphrase, summarise, or rewrite it. "
+            "The report contains: dataset metadata table, freshness rationale, staleness "
+            "indicators, analyst notes, and a metadata disclaimer. "
+            "Use this tool before relying on a dataset for time-sensitive analysis."
         ),
     )
     def assess_dataset_freshness(dataset_id: str) -> dict:  # type: ignore[return]
-        """Evaluate dataset update currency and freshness."""
+        """
+        Evaluate dataset update currency and freshness.
+        Present the 'report' field verbatim — do not paraphrase it.
+        """
         try:
             AssessFreshnessInput(dataset_id=dataset_id)  # Validate
             catalog = get_catalog_service()
@@ -52,7 +56,14 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
                 f"assess_dataset_freshness: {dataset_id!r} → "
                 f"score={assessment.freshness_score}, status={assessment.freshness_status}"
             )
-            return assessment.model_dump(mode="json")
+
+            # Return only the report field.
+            # Returning individual fields (freshness_score, staleness_indicators, etc.)
+            # gives the LLM content to paraphrase instead of copy.
+            # The report already contains all information the user needs.
+            return {
+                "report": assessment.format_report(),
+            }
         except Exception as exc:  # noqa: BLE001
             logger.error(f"assess_dataset_freshness failed: {exc}")
             return {"error": str(exc)}

@@ -1,0 +1,260 @@
+
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>SSA Disability Claims OpenLens — Evaluation Document</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; font-size: 14px; line-height: 1.6; color: #1f2328; background: #fff; }
+  .page { max-width: 760px; margin: 0 auto; padding: 40px 24px 60px; }
+  h1 { font-size: 22px; font-weight: 700; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 6px; }
+  .subtitle { color: #57606a; font-size: 13px; margin-bottom: 32px; }
+  h2 { font-size: 15px; font-weight: 700; color: #1f2328; background: #f7f8fa; border-left: 3px solid #3b82d4; padding: 6px 10px; margin: 32px 0 12px; }
+  h3 { font-size: 13px; font-weight: 700; color: #57606a; margin: 20px 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+  p { margin-bottom: 10px; color: #1f2328; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; }
+  th { background: #f7f8fa; border: 1px solid #e5e7eb; padding: 7px 10px; text-align: left; font-weight: 600; color: #1f2328; }
+  td { border: 1px solid #e5e7eb; padding: 6px 10px; vertical-align: top; }
+  tr:nth-child(even) td { background: #fafbfc; }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge-high { background: #dcfce7; color: #166534; }
+  .badge-medium { background: #fef9c3; color: #854d0e; }
+  .badge-low { background: #fee2e2; color: #991b1b; }
+  .badge-full { background: #dbeafe; color: #1e40af; }
+  .badge-partial { background: #fef9c3; color: #854d0e; }
+  .badge-none { background: #fee2e2; color: #991b1b; }
+  .badge-proxy { background: #f3e8ff; color: #6b21a8; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0 24px; }
+  .kpi { background: #f7f8fa; border: 1px solid #e5e7eb; border-radius: 6px; padding: 14px 12px; text-align: center; }
+  .kpi-num { font-size: 28px; font-weight: 700; color: #3b82d4; }
+  .kpi-label { font-size: 11px; color: #57606a; margin-top: 2px; }
+  .section-note { font-size: 12px; color: #57606a; margin-bottom: 12px; font-style: italic; }
+  ul { padding-left: 18px; margin-bottom: 10px; }
+  li { margin-bottom: 3px; font-size: 13px; }
+  code { background: #f7f8fa; border: 1px solid #e5e7eb; border-radius: 3px; padding: 1px 5px; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
+  .footer { border-top: 1px solid #e5e7eb; margin-top: 48px; padding-top: 12px; text-align: center; font-size: 11px; color: #57606a; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>SSA Disability Claims OpenLens</h1>
+  <div class="subtitle">MCP Dataset Access Server — GSA Hackathon Evaluation Document  •  Branch: test-v1  •  85 tests passing</div>
+
+  
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-num">7</div><div class="kpi-label">MCP Tools</div></div>
+    <div class="kpi"><div class="kpi-num">8</div><div class="kpi-label">Datasets</div></div>
+    <div class="kpi"><div class="kpi-num">27</div><div class="kpi-label">Coverage KB Elements</div></div>
+    <div class="kpi"><div class="kpi-num">85</div><div class="kpi-label">Tests Passing</div></div>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-num">7</div><div class="kpi-label">Intent Categories</div></div>
+    <div class="kpi"><div class="kpi-num">8</div><div class="kpi-label">Recommendation Topics</div></div>
+    <div class="kpi"><div class="kpi-num">30+</div><div class="kpi-label">Recommendations in KB</div></div>
+    <div class="kpi"><div class="kpi-num">8</div><div class="kpi-label">Test Modules</div></div>
+  </div>
+
+  
+  <h2>1. Problem Statement</h2>
+  <p>The Social Security Administration publishes dozens of disability program datasets, but finding the right data, understanding its limitations, and knowing what it <em>cannot</em> answer requires deep institutional knowledge. Analysts and researchers routinely discover that needed data does not exist only after significant research effort, and lack a systematic way to measure the gap between what public data supports and what policy questions demand.</p>
+  <p><strong>SSA Disability Claims OpenLens</strong> solves this by turning dataset discovery into a question-answerable evaluation engine built as a production-quality MCP server.</p>
+
+  
+  <h2>2. Solution Overview</h2>
+  <p>OpenLens is a deterministic, no-LLM-dependency MCP Dataset Access Server. It evaluates how well available SSA public datasets support answering a natural language question, identifies gaps, and generates structured transparency recommendations.</p>
+  <table>
+    <tr><th>Capability</th><th>Description</th></tr>
+    <tr><td><strong>Discover</strong></td><td>Find SSA disability datasets by keyword, source, or topic</td></tr>
+    <tr><td><strong>Understand</strong></td><td>Plain-English explanations of dataset contents and limitations</td></tr>
+    <tr><td><strong>Compare</strong></td><td>Identify shared dimensions and integration opportunities</td></tr>
+    <tr><td><strong>Assess Completeness</strong></td><td>Score geographic, temporal, and operational coverage</td></tr>
+    <tr><td><strong>Assess Freshness</strong></td><td>Score currency against stated update frequency with deterministic rationale</td></tr>
+    <tr><td><strong>Answer Coverage ⭐</strong></td><td>Measure how well datasets support answering a specific policy question</td></tr>
+    <tr><td><strong>Recommend</strong></td><td>Generate prioritized, gap-linked transparency improvement recommendations</td></tr>
+  </table>
+
+  
+  <h2>3. MCP Tools (7)</h2>
+  <table>
+    <tr><th>#</th><th>Tool Name</th><th>Purpose</th></tr>
+    <tr><td>1</td><td><code>discover_disability_datasets</code></td><td>Find datasets by keyword, source, or tag</td></tr>
+    <tr><td>2</td><td><code>explain_dataset</code></td><td>Explain a dataset's fields, use cases, and limitations</td></tr>
+    <tr><td>3</td><td><code>compare_datasets</code></td><td>Identify shared dimensions and integration opportunities across datasets</td></tr>
+    <tr><td>4</td><td><code>analyze_dataset_completeness</code></td><td>Score geographic, temporal, and operational coverage</td></tr>
+    <tr><td>5</td><td><code>assess_dataset_freshness</code></td><td>Score dataset currency vs. stated update frequency; returns rationale, staleness indicators, and analyst notes</td></tr>
+    <tr><td>6</td><td><code>evaluate_answer_coverage</code> ⭐</td><td>Signature tool: evaluate how well public datasets support answering a natural language question</td></tr>
+    <tr><td>7</td><td><code>recommend_transparency_improvements</code></td><td>Generate prioritized, gap-linked transparency recommendations</td></tr>
+  </table>
+
+  
+  <h2>4. Dataset Catalog (8 datasets)</h2>
+  <table>
+    <tr><th>Dataset ID</th><th>Name</th><th>Source</th><th>Frequency</th><th>Geographic Coverage</th><th>Temporal</th></tr>
+    <tr><td><code>ssa-oasdi-beneficiaries-by-state</code></td><td>OASDI Beneficiaries by State &amp; County</td><td>SSA Open Data</td><td>Annual</td><td>State &amp; county</td><td>1970–present</td></tr>
+    <tr><td><code>ssa-odar-pending-cases</code></td><td>ODAR Pending Cases by Hearing Office</td><td>SSA Open Data</td><td>Monthly</td><td>All ODAR hearing offices</td><td>2007–present</td></tr>
+    <tr><td><code>ssa-disability-applications-decisions</code></td><td>SSI/SSDI Applications and Decisions</td><td>SSA Open Data</td><td>Annual</td><td>National</td><td>1960–2023</td></tr>
+    <tr><td><code>ssa-field-office-locator</code></td><td>SSA Field Office Locations</td><td>SSA Open Data</td><td>Quarterly</td><td>All 50 states, DC, territories</td><td>Current snapshot</td></tr>
+    <tr><td><code>ssa-disability-research-statistics</code></td><td>SSA Disability Research Statistics</td><td>SSA Open Data</td><td>Annual</td><td>State-level</td><td>1970–2023</td></tr>
+    <tr><td><code>ssa-ssi-recipients-by-state</code></td><td>SSI Recipients by State &amp; County</td><td>SSA Open Data</td><td>Monthly</td><td>All 50 states, DC, territories</td><td>2008–present</td></tr>
+    <tr><td><code>ssa-red-book</code></td><td>SSA Red Book — Work Incentives</td><td>SSA Open Data</td><td>Annual</td><td>National</td><td>1960–present</td></tr>
+    <tr><td><code>data-gov-ssa-performance</code></td><td>SSA Annual Performance Report</td><td>Data.gov</td><td>Annual</td><td>National</td><td>2003–2023</td></tr>
+  </table>
+
+  
+  <h2>5. Answer Coverage Engine</h2>
+  <p class="section-note">Deterministic, no-LLM-dependency. Same question always produces the same result.</p>
+
+  <h3>Coverage Ratings</h3>
+  <table>
+    <tr><th>Rating</th><th>Score</th><th>Meaning</th></tr>
+    <tr><td><span class="badge badge-full">Complete</span></td><td>90–100</td><td>Directly answerable from existing public datasets</td></tr>
+    <tr><td><span class="badge badge-full">High</span></td><td>75–89</td><td>Most information available; minor gaps remain</td></tr>
+    <tr><td><span class="badge badge-partial">Partial</span></td><td>40–74</td><td>Relevant datasets support part of the analysis; some critical gaps</td></tr>
+    <tr><td><span class="badge badge-proxy">Limited</span></td><td>15–39</td><td>Relevant datasets found but major gaps prevent a complete answer</td></tr>
+    <tr><td><span class="badge badge-none">Unsupported</span></td><td>0–14</td><td>No relevant datasets found; question outside known SSA domain</td></tr>
+  </table>
+
+  <h3>Assessment Confidence</h3>
+  <table>
+    <tr><th>Condition</th><th>Confidence</th></tr>
+    <tr><td>No relevant datasets found (Unsupported)</td><td><span class="badge badge-none">Low</span></td></tr>
+    <tr><td>Limited coverage with no direct dataset matches (context-only)</td><td><span class="badge badge-partial">Medium</span></td></tr>
+    <tr><td>Intent identified + gaps enumerated + recommendations generated</td><td><span class="badge badge-high">High</span></td></tr>
+    <tr><td>Partial, High, or Complete coverage</td><td><span class="badge badge-high">High</span></td></tr>
+  </table>
+
+  <h3>Intent Categories (7)</h3>
+  <table>
+    <tr><th>Category</th><th>Example Question Pattern</th><th>Scope</th></tr>
+    <tr><td><strong>Access</strong></td><td>Which field offices have the highest service demand? What should SSA publish?</td><td>Field office, national</td></tr>
+    <tr><td><strong>Equity</strong></td><td>Are there racial disparities in disability allowance rates?</td><td>National</td></tr>
+    <tr><td><strong>Performance</strong></td><td>How long are processing times by state?</td><td>State level</td></tr>
+    <tr><td><strong>Finance</strong></td><td>Is SSI benefit adequacy sufficient relative to poverty levels?</td><td>National &amp; state</td></tr>
+    <tr><td><strong>Outcomes</strong></td><td>What are the return-to-work outcomes for Ticket to Work participants?</td><td>National</td></tr>
+    <tr><td><strong>Accessibility</strong></td><td>Do rural communities have less access to disability services than urban communities?</td><td>County &amp; community</td></tr>
+    <tr><td><strong>Geographic Equity</strong></td><td>Are there regional disparities in disability service distribution?</td><td>County &amp; regional</td></tr>
+  </table>
+
+  <h3>Coverage KB Elements (27)</h3>
+  <table>
+    <tr><th>Element</th><th>Quality</th><th>Weight</th></tr>
+    <tr><td>Disability claim processing times</td><td><span class="badge badge-partial">Partial</span></td><td>Critical (2)</td></tr>
+    <tr><td>Hearing-level wait times</td><td><span class="badge badge-partial">Partial</span></td><td>Critical (2)</td></tr>
+    <tr><td>Field office appointment &amp; walk-in volume</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td></tr>
+    <tr><td>Geographic disaggregation of outcomes</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
+    <tr><td>SSA field office locations and coverage</td><td><span class="badge badge-full">Full</span></td><td>Supporting (1)</td></tr>
+    <tr><td>Field office operational metrics</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td></tr>
+    <tr><td>SSA office staffing levels</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td></tr>
+    <tr><td>Office workload and capacity</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td></tr>
+    <tr><td>Applicant age distribution</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
+    <tr><td>Gender disaggregation</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
+    <tr><td>Race and ethnicity data</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td></tr>
+    <tr><td>Applicant income and economic status</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td></tr>
+    <tr><td>Impairment/diagnosis categories</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
+    <tr><td>Disability program allowance rates</td><td><span class="badge badge-partial">Partial</span></td><td>Critical (2)</td></tr>
+    <tr><td>Application volumes</td><td><span class="badge badge-full">Full</span></td><td>Supporting (1)</td></tr>
+    <tr><td>Benefit amounts by geography &amp; demographics</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
+    <tr><td>Beneficiary/recipient counts</td><td><span class="badge badge-full">Full</span></td><td>Supporting (1)</td></tr>
+    <tr><td>Appeals and hearing outcomes</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
+    <tr><td>Work incentive program participation</td><td><span class="badge badge-proxy">Proxy</span></td><td>Supporting (1)</td></tr>
+    <tr><td>Agency performance metrics</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
+    <tr><td>SSI program data</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
+    <tr><td>SSDI program data</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
+    <tr><td>Geographic distribution of disability service access</td><td><span class="badge badge-partial">Partial</span></td><td>Critical (2)</td></tr>
+    <tr><td>Travel distance to nearest SSA field office</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td></tr>
+    <tr><td>Field office service area boundaries</td><td><span class="badge badge-none">None</span></td><td>Supporting (1)</td></tr>
+    <tr><td>Accessibility accommodations at field offices</td><td><span class="badge badge-none">None</span></td><td>Supporting (1)</td></tr>
+    <tr><td>Disability application counts by county</td><td><span class="badge badge-proxy">Proxy</span></td><td>Supporting (1)</td></tr>
+  </table>
+
+  
+  <h2>6. Freshness Assessment Engine</h2>
+  <p class="section-note">Fully deterministic. Scores based on catalog metadata — not a live SSA source query.</p>
+  <table>
+    <tr><th>Field</th><th>Description</th></tr>
+    <tr><td>Summary Table</td><td>Dataset ID, last updated, update frequency, days since update, freshness score (0–100), status</td></tr>
+    <tr><td>Freshness Rationale</td><td>Deterministic natural-language explanation of score and status (no LLM)</td></tr>
+    <tr><td>Staleness Indicators</td><td>Specific flags triggered by dataset age (overdue days, 12-month, 24-month thresholds)</td></tr>
+    <tr><td>Analyst Notes</td><td>Action-oriented guidance based on freshness status</td></tr>
+    <tr><td>Assessment Note</td><td>Disclaimer that scores reflect catalog metadata</td></tr>
+  </table>
+  <table>
+    <tr><th>Status</th><th>Condition</th></tr>
+    <tr><td><span class="badge badge-high">Current</span></td><td>Within expected refresh interval</td></tr>
+    <tr><td><span class="badge badge-partial">Aging</span></td><td>Exceeded refresh interval by up to 50%</td></tr>
+    <tr><td><span class="badge badge-none">Stale</span></td><td>Significantly exceeded refresh interval</td></tr>
+    <tr><td><span class="badge badge-proxy">Unknown</span></td><td>Last update date unavailable</td></tr>
+  </table>
+
+  
+  <h2>7. Recommendation Knowledge Base (8 topics, 30+ recommendations)</h2>
+  <table>
+    <tr><th>Topic</th><th>Category Labels</th><th>High-Priority Recommendations (sample)</th></tr>
+    <tr><td>Field Office Access</td><td>Operational Metrics, Access Data, Geographic Detail</td><td>Publish monthly visit volumes; publish staffing FTE; publish appointment wait times by office</td></tr>
+    <tr><td>Staffing &amp; Workload</td><td>Operational Metrics, Performance</td><td>Publish FTE staffing by office; report adjudicator-to-caseload ratios</td></tr>
+    <tr><td>Processing Time</td><td>Geographic Detail, Temporal Granularity</td><td>Publish state-level initial claim processing times; publish wait-time distributions</td></tr>
+    <tr><td>Demographic Equity</td><td>Demographic Data</td><td>Publish application/award/denial rates by race &amp; ethnicity at all appeal levels</td></tr>
+    <tr><td>SSI Adequacy</td><td>Program Outcomes, Finance</td><td>Publish SSI outcomes cross-tabulated with income decile</td></tr>
+    <tr><td>Work Incentives</td><td>Program Outcomes</td><td>Publish Ticket to Work assignment and return-to-work outcomes annually</td></tr>
+    <tr><td>Geographic Equity</td><td>Geographic Detail</td><td>Publish state-level disability allowance rates</td></tr>
+    <tr><td>Geographic Accessibility</td><td>Geographic Detail, Access Data</td><td>Publish travel distance to nearest office by ZIP/county; publish service area boundaries; publish rural vs. urban wait time breakdowns</td></tr>
+  </table>
+
+  
+  <h2>8. Deployment — watsonx Orchestrate</h2>
+  <table>
+    <tr><th>Field</th><th>Value</th></tr>
+    <tr><td>Platform</td><td>watsonx Orchestrate SaaS (ca-tor region)</td></tr>
+    <tr><td>Agent Name</td><td><code>ssa_openlens_agent</code></td></tr>
+    <tr><td>LLM</td><td><code>groq/openai/gpt-oss-120b</code></td></tr>
+    <tr><td>Agent Style</td><td><code>react_core</code></td></tr>
+    <tr><td>Toolkit Name</td><td><code>ssa-disability-claims-openlens</code></td></tr>
+    <tr><td>Transport</td><td>stdio (Python MCP server)</td></tr>
+    <tr><td>Deployment Config</td><td><code>deploy/agent.yaml</code></td></tr>
+    <tr><td>Instance URL</td><td>https://api.ca-tor.watson-orchestrate.cloud.ibm.com/instances/dd7326ec-5f67-47ec-88ee-fd9a75f7fda0</td></tr>
+  </table>
+
+  
+  <h2>9. Architecture</h2>
+  <table>
+    <tr><th>Layer</th><th>Component</th><th>Role</th></tr>
+    <tr><td>UI</td><td>watsonx Orchestrate Agent Chat</td><td>End-user interaction</td></tr>
+    <tr><td>Agent</td><td>ssa_openlens_agent (native, react_core)</td><td>LLM routing and tool dispatch</td></tr>
+    <tr><td>Toolkit</td><td>ssa-disability-claims-openlens</td><td>7 MCP tools registered in Orchestrate</td></tr>
+    <tr><td>MCP Server</td><td>FastMCP / python main.py</td><td>Hosts tools, prompts, resources over stdio</td></tr>
+    <tr><td>Engine</td><td>AnswerCoverageEngine</td><td>Deterministic intent + coverage scoring</td></tr>
+    <tr><td>Services</td><td>DatasetCatalogService, DatasetAnalysisService, RecommendationService</td><td>Dataset lookup, freshness scoring, recommendation generation</td></tr>
+    <tr><td>Data Sources</td><td>SSA Open Data Portal, Data.gov API</td><td>Live and static dataset catalog</td></tr>
+  </table>
+
+  
+  <h2>10. Test Coverage</h2>
+  <table>
+    <tr><th>Test Module</th><th>What It Tests</th><th>Status</th></tr>
+    <tr><td><code>test_accessibility_equity.py</code></td><td>Rural/urban access questions never return Unsupported (19 regression tests)</td><td><span class="badge badge-high">Passing</span></td></tr>
+    <tr><td><code>test_answer_coverage.py</code></td><td>Coverage scoring, ratings, format_report() structure</td><td><span class="badge badge-high">Passing</span></td></tr>
+    <tr><td><code>test_compare.py</code></td><td>Dataset comparison, shared dimensions, integration opportunities</td><td><span class="badge badge-high">Passing</span></td></tr>
+    <tr><td><code>test_completeness.py</code></td><td>Completeness scoring for known datasets</td><td><span class="badge badge-high">Passing</span></td></tr>
+    <tr><td><code>test_discovery.py</code></td><td>Keyword search, source filter, tag filter</td><td><span class="badge badge-high">Passing</span></td></tr>
+    <tr><td><code>test_explain.py</code></td><td>Dataset explanation structure and field presence</td><td><span class="badge badge-high">Passing</span></td></tr>
+    <tr><td><code>test_freshness.py</code></td><td>Freshness scoring, status classification, staleness indicators</td><td><span class="badge badge-high">Passing</span></td></tr>
+    <tr><td><code>test_recommendations.py</code></td><td>Recommendation generation, priority ordering, executive summary</td><td><span class="badge badge-high">Passing</span></td></tr>
+  </table>
+  <p><strong>Total: 85 tests passing  •  0 failures  •  68% code coverage</strong></p>
+
+  
+  <h2>11. Key Design Principles</h2>
+  <ul>
+    <li><strong>No LLM dependency in the engine</strong> — all coverage scoring, intent matching, freshness calculation, and recommendation generation is deterministic pattern matching. Same question always returns the same result.</li>
+    <li><strong>Gap-linked recommendations</strong> — every recommendation is linked to the specific information element gap it closes, categorized, prioritized, and justified.</li>
+    <li><strong>Auditability</strong> — the engine exposes its reasoning: intent category, matched elements, coverage quality per element, weighted score, and staleness indicators are all returned in the tool response.</li>
+    <li><strong>Separation of concerns</strong> — the LLM agent copies the pre-formatted report verbatim; all intelligence lives in the MCP server, not in the agent prompt.</li>
+    <li><strong>Production quality</strong> — Pydantic v2 models, full pytest suite with regression tests, Dockerfile, watsonx Orchestrate deployment config, and ADK-compatible agent definition.</li>
+  </ul>
+
+  <div class="footer">Made with IBM Bob  •  SSA Disability Claims OpenLens  •  GSA Hackathon</div>
+</div>
+</body>
+</html>
