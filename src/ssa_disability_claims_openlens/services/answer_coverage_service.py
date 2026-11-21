@@ -376,10 +376,55 @@ _INTENT_KB: list[_IntentEntry] = [
         ],
     ),
     _IntentEntry(
-        patterns=[r"access(ib|ibility)", r"maximize.*understanding", r"what.*should.*publish",
-                  r"additional.*dataset", r"metrics.*should", r"publish.*first"],
+        # "What should SSA publish?" — a data publication roadmap question.
+        # Distinct from assessing current coverage: the user wants a prioritised
+        # list of new datasets/metrics, not a scorecard of what already exists.
+        patterns=[
+            r"maximize.*understanding", r"what.*should.*publish",
+            r"additional.*dataset", r"metrics.*should", r"publish.*first",
+            r"what.*data.*should", r"should.*publish.*first", r"prioriti[sz]e.*publish",
+            r"what.*new.*dataset", r"data.*gap.*publish", r"publish.*to.*improve",
+        ],
+        category="Policy",
+        primary_intent_template=(
+            "Identify which new SSA datasets or metrics, if published, would most "
+            "improve public understanding of disability service accessibility"
+        ),
+        required_data_types=[
+            "Field office appointment wait times",
+            "Field office visit volumes",
+            "Staffing levels by office",
+            "Geographic beneficiary-to-office ratios",
+        ],
+        scope="National, all field offices and hearing offices",
+        seed_elements=[
+            "Field office operational metrics (staffing, volume, wait times)",
+            "Field office appointment and walk-in volume",
+            "SSA office staffing levels",
+            "Travel distance to nearest SSA field office",
+        ],
+        context_dataset_ids=[
+            "ssa-field-office-locator",
+            "ssa-oasdi-beneficiaries-by-state",
+            "ssa-ssi-recipients-by-state",
+            "ssa-odar-pending-cases",
+            "ssa-disability-applications-decisions",
+        ],
+    ),
+    _IntentEntry(
+        # "Assess current coverage" — a scorecard question about what SSA has now.
+        # Distinct from the publication roadmap: the user wants to know how well
+        # existing datasets support answering an accessibility question.
+        patterns=[
+            r"assess.*ability", r"ability.*dataset", r"current.*dataset.*support",
+            r"support.*understanding", r"how\s*well.*dataset", r"dataset.*support.*understanding",
+            r"access(ib|ibility)",
+        ],
         category="Access",
-        primary_intent_template="Determine which SSA datasets or metrics would most improve public understanding of disability service accessibility",
+        primary_intent_template=(
+            "Assess how well current SSA public datasets support public understanding "
+            "of disability service accessibility"
+        ),
         required_data_types=["Office visit volumes", "Appointment wait times", "Staffing capacity", "Geographic coverage"],
         scope="National, all field offices",
         seed_elements=[
@@ -829,7 +874,22 @@ class AnswerCoverageEngine:
 
         # 9. Potential impact — intent-specific where available, generic fallback
         intent_category = intent.intent_category.lower() if intent else ""
-        if intent_category in ("accessibility", "geographic equity", "access"):
+        if intent_category == "policy":
+            potential_impact = (
+                "Publishing the recommended datasets and metrics would give the public, "
+                "researchers, and policymakers the evidence base they currently lack.\n\n"
+                "The highest-priority publications to maximise public understanding are:\n"
+                "- Monthly field office appointment and walk-in volumes — reveals demand patterns\n"
+                "- Average appointment wait times by field office — directly measures service access\n"
+                "- FTE staffing levels by field office — links capacity to demand\n"
+                "- Travel distance from beneficiary ZIP codes to nearest office — quantifies geographic barriers\n\n"
+                "Taken together, these four datasets would transform public understanding of SSA "
+                "disability service accessibility. Stakeholders could identify which communities "
+                "face the longest waits and furthest travel, evaluate whether staffing matches "
+                "local demand, and build an evidence-based case for resource allocation and "
+                "office expansion. No other combination of currently published data achieves this."
+            )
+        elif intent_category in ("accessibility", "geographic equity", "access"):
             potential_impact = (
                 "Publishing the recommended data elements would enable researchers and "
                 "policymakers to directly evaluate whether rural communities face greater "

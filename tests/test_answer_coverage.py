@@ -180,3 +180,88 @@ class TestEvaluateAnswerCoverage:
             "What are disability claim processing times by state?"
         )
         assert len(assessment.potential_impact) > 20
+
+
+class TestDistinctIntentRouting:
+    """
+    Regression tests: questions with different user intent must produce
+    distinct reports. These tests encode the specific bug where "what should
+    SSA publish?" and "assess current coverage" collapsed to identical output.
+    """
+
+    Q_PUBLISH = (
+        "If SSA wanted to maximize public understanding of disability service "
+        "accessibility, what additional datasets or metrics should be published first?"
+    )
+    Q_ASSESS = (
+        "Assess the ability of current SSA public datasets to support public "
+        "understanding of disability service accessibility."
+    )
+
+    def test_publish_question_routes_to_policy_intent(
+        self, coverage_engine: AnswerCoverageEngine
+    ) -> None:
+        a = coverage_engine.evaluate(self.Q_PUBLISH)
+        assert a.intent is not None
+        assert a.intent.intent_category == "Policy", (
+            f"Expected 'Policy' intent, got '{a.intent.intent_category}'"
+        )
+
+    def test_assess_question_routes_to_access_intent(
+        self, coverage_engine: AnswerCoverageEngine
+    ) -> None:
+        a = coverage_engine.evaluate(self.Q_ASSESS)
+        assert a.intent is not None
+        assert a.intent.intent_category == "Access", (
+            f"Expected 'Access' intent, got '{a.intent.intent_category}'"
+        )
+
+    def test_primary_intents_are_different(
+        self, coverage_engine: AnswerCoverageEngine
+    ) -> None:
+        a1 = coverage_engine.evaluate(self.Q_PUBLISH)
+        a2 = coverage_engine.evaluate(self.Q_ASSESS)
+        assert a1.intent is not None and a2.intent is not None
+        assert a1.intent.primary_intent != a2.intent.primary_intent, (
+            "Both questions mapped to the same primary intent — intent routing is broken"
+        )
+
+    def test_reports_are_not_identical(
+        self, coverage_engine: AnswerCoverageEngine
+    ) -> None:
+        r1 = coverage_engine.evaluate(self.Q_PUBLISH).format_report()
+        r2 = coverage_engine.evaluate(self.Q_ASSESS).format_report()
+        assert r1 != r2, (
+            "Both questions produced identical reports — "
+            "the intent split is not propagating to report content"
+        )
+
+    def test_potential_impacts_are_different(
+        self, coverage_engine: AnswerCoverageEngine
+    ) -> None:
+        a1 = coverage_engine.evaluate(self.Q_PUBLISH)
+        a2 = coverage_engine.evaluate(self.Q_ASSESS)
+        assert a1.potential_impact != a2.potential_impact, (
+            "Both questions produced the same Potential Impact — "
+            "intent-specific potential_impact branch is not firing"
+        )
+
+    def test_publish_question_potential_impact_mentions_prioritisation(
+        self, coverage_engine: AnswerCoverageEngine
+    ) -> None:
+        """The roadmap question must reference prioritisation/publication order."""
+        a = coverage_engine.evaluate(self.Q_PUBLISH)
+        impact_lower = a.potential_impact.lower()
+        assert any(w in impact_lower for w in ["priority", "highest-priority", "first", "published"]), (
+            "Policy intent potential_impact should mention publication priority"
+        )
+
+    def test_assess_question_potential_impact_mentions_evaluation(
+        self, coverage_engine: AnswerCoverageEngine
+    ) -> None:
+        """The assessment question must reference evaluating existing coverage."""
+        a = coverage_engine.evaluate(self.Q_ASSESS)
+        impact_lower = a.potential_impact.lower()
+        assert any(w in impact_lower for w in ["rural", "urban", "geographic", "evaluate"]), (
+            "Access intent potential_impact should mention geographic/evaluation framing"
+        )
