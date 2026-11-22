@@ -11,15 +11,13 @@ Tests:
 
 from __future__ import annotations
 
-import pytest
-
 from src.ssa_disability_claims_openlens.services.dataset_catalog_service import (
     DatasetCatalogService,
 )
 
 
 class TestExplainDataset:
-    VALID_ID = "ssa-odar-pending-cases"
+    VALID_ID = "ssa-hearing-office-workload"
     INVALID_ID = "does-not-exist-xyz"
 
     def test_returns_detail_for_valid_id(

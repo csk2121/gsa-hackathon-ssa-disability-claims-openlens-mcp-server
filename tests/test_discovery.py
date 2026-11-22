@@ -12,11 +12,17 @@ Tests:
 
 from __future__ import annotations
 
-import pytest
+import unittest.mock as mock
 
-from src.ssa_disability_claims_openlens.models import DataSource, DiscoverDatasetsResult
+from src.ssa_disability_claims_openlens.models import (
+    DatasetSummary,
+    DataSource,
+    DiscoverDatasetsResult,
+)
 from src.ssa_disability_claims_openlens.services.dataset_catalog_service import (
+    DataGovAdapter,
     DatasetCatalogService,
+    StaticCatalogAdapter,
 )
 
 
@@ -95,6 +101,59 @@ class TestDiscoverDatasets:
     ) -> None:
         datasets = catalog_service.list_datasets()
         ids = {ds.dataset_id for ds in datasets}
-        assert "ssa-odar-pending-cases" in ids
+        assert "ssa-hearing-office-workload" in ids
         assert "ssa-field-office-locator" in ids
-        assert "ssa-disability-applications-decisions" in ids
+        assert "ssa-disability-claim-data" in ids
+
+
+# ── Query synonyms and live search ────────────────────────────────────────────
+
+
+def _live_summary(slug: str, title: str) -> DatasetSummary:
+    summary = DataGovAdapter._summary_from_result({
+        "slug": slug,
+        "dcat": {
+            "title": title,
+            "identifier": "US-GOV-SSA-0",
+            "description": "d",
+            "landingPage": {"accessURL": f"https://www.ssa.gov/data/{slug}.html"},
+        },
+    })
+    assert summary is not None
+    return summary
+
+
+def _live_service() -> tuple[DatasetCatalogService, DataGovAdapter]:
+    adapter = DataGovAdapter("https://catalog.data.gov/api/v1")
+    return DatasetCatalogService(static_adapter=StaticCatalogAdapter(), live_adapters=[adapter]), adapter
+
+
+class TestDiscoveryQueries:
+    def test_backlog_finds_datasets_that_say_pending(
+        self, catalog_service: DatasetCatalogService
+    ) -> None:
+        ids = {ds.dataset_id for ds in catalog_service.list_datasets(query="backlog")}
+        assert {"ssa-hearing-office-workload", "ssa-state-agency-workload-data"} <= ids
+
+    def test_query_is_sent_to_data_gov_with_synonyms(self) -> None:
+        service, adapter = _live_service()
+        found = [
+            _live_summary("field-office-claims-pending", "Field Office Claims Pending"),
+            _live_summary("hearing-office-workload-data-march-2019", "Hearing Office Workload Data - March 2019"),
+        ]
+        with mock.patch.object(adapter, "search", return_value=found) as search, \
+             mock.patch.object(adapter, "fetch_summaries") as fetch:
+            datasets = service.list_datasets(query="backlog")
+        search.assert_called_once_with("backlog OR pending")
+        fetch.assert_not_called()
+        names = [ds.name for ds in datasets]
+        assert "Field Office Claims Pending" in names
+        assert "Hearing Office Workload Data - March 2019" not in names  # archived edition
+
+    def test_generic_query_falls_back_to_default_live_search(self) -> None:
+        service, adapter = _live_service()
+        with mock.patch.object(adapter, "search") as search, \
+             mock.patch.object(adapter, "fetch_summaries", return_value=[]) as fetch:
+            service.list_datasets(query="disability")
+        search.assert_not_called()
+        fetch.assert_called_once()

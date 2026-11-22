@@ -21,14 +21,14 @@
     "question": "How long are people waiting for appointments at field offices?",
     "description": "Operational access question \u2014 location data exists but wait times not published",
     "passed": true,
-    "actual_score": 44.0,
-    "actual_rating": "Partial",
+    "actual_score": 39.0,
+    "actual_rating": "Limited",
     "expected_rating": "Partial",
     "details": "PASS"
   },
   {
     "question": "What is the hearing office backlog by state?",
-    "description": "Hearing backlog question \u2014 ODAR data partially covers this",
+    "description": "Hearing backlog question \u2014 OHO hearing office data partially covers this",
     "passed": true,
     "actual_score": 60.0,
     "actual_rating": "Partial",
@@ -57,7 +57,7 @@
     "question": "How many SSA staff work at each hearing office?",
     "description": "Staffing question \u2014 staffing not published, but workload data is a proxy",
     "passed": true,
-    "actual_score": 20.0,
+    "actual_score": 39.0,
     "actual_rating": "Limited",
     "expected_rating": "Partial",
     "details": "PASS"

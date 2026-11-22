@@ -3,7 +3,7 @@ Security tests — outbound HTTP request mitigations.
 
 Covers:
   1. DataGovAdapter.fetch_detail() allowlist: only issues a network request
-     for CKAN package names previously returned by fetch_summaries(). An
+     for Data.gov slugs previously returned by fetch_summaries(). An
      attacker-supplied dataset_id that was never discovered must NOT trigger
      an outbound request.
 
@@ -21,7 +21,6 @@ from src.ssa_disability_claims_openlens.services.dataset_catalog_service import 
     DataGovAdapter,
 )
 
-
 # ── Fix 1: DataGovAdapter fetch_detail allowlist ───────────────────────────────
 
 
@@ -29,7 +28,7 @@ class TestDataGovAdapterAllowlist:
     """fetch_detail must not hit the network for unknown package names."""
 
     def _adapter(self) -> DataGovAdapter:
-        return DataGovAdapter(base_url="https://catalog.data.gov/api/3/action")
+        return DataGovAdapter(base_url="https://catalog.data.gov/api/v1")
 
     def test_unknown_id_returns_none_without_network(self) -> None:
         """
@@ -42,7 +41,7 @@ class TestDataGovAdapterAllowlist:
         or raise a network error in the test environment.
         """
         adapter = self._adapter()
-        # _known_ckan_names is empty — nothing has been discovered yet
+        # _known_slugs is empty — nothing has been discovered yet
         result = adapter.fetch_detail("datagov-some-attacker-controlled-name")
         assert result is None
 
@@ -54,7 +53,7 @@ class TestDataGovAdapterAllowlist:
         """
         adapter = self._adapter()
         # Simulate what fetch_summaries does: register a discovered name
-        adapter._known_ckan_names.add("ssa-annual-performance-report")
+        adapter._known_slugs.add("ssa-disability-claim-data")
         # The name is now known — fetch_detail should proceed past the guard.
         # We can't easily assert the HTTP call without a live network or mock,
         # but we can assert it does NOT return None due to the allowlist check
@@ -65,7 +64,7 @@ class TestDataGovAdapterAllowlist:
             mock_client_cls.return_value.__enter__.return_value.get.side_effect = (
                 Exception("network disabled in tests")
             )
-            result = adapter.fetch_detail("datagov-ssa-annual-performance-report")
+            result = adapter.fetch_detail("datagov-ssa-disability-claim-data")
             # Result is None because httpx raised, but the guard was passed
             # (mock_client_cls was actually called, proving we got past the allowlist)
             mock_client_cls.assert_called_once()
@@ -77,7 +76,7 @@ class TestDataGovAdapterAllowlist:
         will never be in the allowlist, so it must be blocked.
         """
         adapter = self._adapter()
-        result = adapter.fetch_detail("ssa-odar-pending-cases")
+        result = adapter.fetch_detail("ssa-hearing-office-workload")
         assert result is None
 
     def test_empty_id_blocked(self) -> None:
@@ -100,9 +99,9 @@ class TestDataGovAdapterAllowlist:
         """
         adapter_a = self._adapter()
         adapter_b = self._adapter()
-        adapter_a._known_ckan_names.add("some-package")
+        adapter_a._known_slugs.add("some-package")
         # adapter_b must not see names registered in adapter_a
-        assert "some-package" not in adapter_b._known_ckan_names
+        assert "some-package" not in adapter_b._known_slugs
 
 
 # ── Fix 2: Settings URL validation ────────────────────────────────────────────
@@ -112,11 +111,11 @@ class TestSettingsDataGovUrlValidation:
     """data_gov_api_base_url must be anchored to the official Data.gov host."""
 
     def test_default_url_is_accepted(self) -> None:
-        s = Settings(data_gov_api_base_url="https://catalog.data.gov/api/3/action")
-        assert s.data_gov_api_base_url == "https://catalog.data.gov/api/3/action"
+        s = Settings(data_gov_api_base_url="https://catalog.data.gov/api/v1")
+        assert s.data_gov_api_base_url == "https://catalog.data.gov/api/v1"
 
     def test_url_with_trailing_path_accepted(self) -> None:
-        s = Settings(data_gov_api_base_url="https://catalog.data.gov/api/3/action/")
+        s = Settings(data_gov_api_base_url="https://catalog.data.gov/api/v1/")
         assert s.data_gov_api_base_url.startswith("https://catalog.data.gov/")
 
     def test_http_downgrade_rejected(self) -> None:

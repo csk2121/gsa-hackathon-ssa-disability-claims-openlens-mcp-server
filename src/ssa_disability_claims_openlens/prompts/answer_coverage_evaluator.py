@@ -7,6 +7,8 @@ a set of benchmark questions.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastmcp import FastMCP
 
 
@@ -20,7 +22,7 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             "analysis across multiple questions."
         ),
     )
-    def answer_coverage_evaluator(questions: str) -> list[dict]:
+    def answer_coverage_evaluator(questions: str) -> list[dict[str, Any]]:
         """
         Generate a prompt for systematic Answer Coverage evaluation.
 

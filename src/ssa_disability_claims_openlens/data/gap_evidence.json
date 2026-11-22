@@ -1,0 +1,75 @@
+{
+  "_comment": [
+    "Evidence for every coverage element rated 'None' (no public data) in answer_coverage_service.py.",
+    "Each claim lists the Data.gov searches run (SSA datasets with downloads) and every hit a person",
+    "reviewed, with why it does not close the gap. scripts/check_gap_claims.py re-runs the searches",
+    "and fails on any new, unreviewed hit. tests/test_catalog_grounding.py requires an entry here",
+    "for every 'None' element and fails when searched_on is older than max_age_days."
+  ],
+  "searched_on": "2026-11-22",
+  "max_age_days": 120,
+  "search_params": {
+    "org_slug": "ssa",
+    "has_download": "true",
+    "per_page": 25
+  },
+  "claims": {
+    "Race and ethnicity data": {
+      "queries": [
+        "race",
+        "ethnicity",
+        "racial",
+        "Hispanic"
+      ],
+      "verdict": "No SSA dataset with downloads on Data.gov reports disability applications, decisions or beneficiaries by race or ethnicity.",
+      "reviewed_hits": {}
+    },
+    "Travel distance to nearest SSA field office": {
+      "queries": [
+        "distance",
+        "travel",
+        "drive time"
+      ],
+      "verdict": "No SSA dataset with downloads on Data.gov reports distance or travel time to field offices.",
+      "reviewed_hits": {}
+    },
+    "Field office service area boundaries": {
+      "queries": [
+        "service area",
+        "field office boundaries",
+        "jurisdiction"
+      ],
+      "verdict": "No SSA dataset with downloads on Data.gov defines field office service areas.",
+      "reviewed_hits": {}
+    },
+    "Accessibility accommodations at field offices": {
+      "queries": [
+        "accessibility",
+        "ADA",
+        "accommodation",
+        "interpreter"
+      ],
+      "verdict": "No SSA dataset with downloads on Data.gov describes physical accessibility or accommodations at field offices. The only related record is national interpreter call counts (US-GOV-SSA-2318).",
+      "reviewed_hits": {
+        "US-GOV-SSA-2318": "National Telephone Interpreter Service call counts (2018 on) — shows language-service use, not per-office physical accessibility or accommodations."
+      }
+    },
+    "Reasons for claim denials": {
+      "queries": [
+        "denial reasons",
+        "reason for denial",
+        "technical denial",
+        "basis for denial",
+        "medical denial"
+      ],
+      "verdict": "No SSA dataset with downloads on Data.gov reports why disability claims are denied (medical vs. technical reasons).",
+      "reviewed_hits": {
+        "US-GOV-SSA-1409": "Processing-time dataset; mentions technical denials only as an exclusion — no denial reasons.",
+        "US-GOV-SSA-349": "Processing-time dataset; mentions technical denials only as an exclusion — no denial reasons.",
+        "US-GOV-SSA-1612": "Processing-time dataset; mentions technical denials only as an exclusion — no denial reasons.",
+        "US-GOV-SSA-1768": "Processing-time dataset; mentions technical denials only as an exclusion — no denial reasons.",
+        "US-GOV-SSA-1415": "Processing-time dataset; mentions technical denials only as an exclusion — no denial reasons."
+      }
+    }
+  }
+}

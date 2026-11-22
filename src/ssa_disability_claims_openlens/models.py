@@ -12,16 +12,15 @@ Domain models are grouped logically:
 from __future__ import annotations
 
 from datetime import date
-from enum import Enum
-from typing import Any, Optional
+from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
-
 
 # ── Enumerations ───────────────────────────────────────────────────────────────
 
 
-class DataSource(str, Enum):
+class DataSource(StrEnum):
     """Known data source adapters."""
 
     SSA_OPEN_DATA = "SSA Open Data Portal"
@@ -29,7 +28,7 @@ class DataSource(str, Enum):
     STATIC_CATALOG = "Static Catalog"
 
 
-class UpdateFrequency(str, Enum):
+class UpdateFrequency(StrEnum):
     """How often a dataset is updated."""
 
     REAL_TIME = "Real-time"
@@ -42,7 +41,7 @@ class UpdateFrequency(str, Enum):
     UNKNOWN = "Unknown"
 
 
-class CoverageRating(str, Enum):
+class CoverageRating(StrEnum):
     """
     Qualitative rating of Answer Coverage.
 
@@ -64,13 +63,13 @@ class CoverageRating(str, Enum):
     UNSUPPORTED = "Unsupported"  # 0–14  AND no domain match / no intent found
 
 
-class RecommendationPriority(str, Enum):
+class RecommendationPriority(StrEnum):
     HIGH = "High"
     MEDIUM = "Medium"
     LOW = "Low"
 
 
-class FreshnessStatus(str, Enum):
+class FreshnessStatus(StrEnum):
     CURRENT = "Current"
     AGING = "Aging"
     STALE = "Stale"
@@ -88,9 +87,21 @@ class DatasetSummary(BaseModel):
     description: str = Field(description="Plain-English description of dataset contents")
     source: DataSource = Field(description="Origin portal for this dataset")
     update_frequency: UpdateFrequency = Field(description="How often the dataset is refreshed")
-    url: str = Field(description="Canonical URL to the dataset landing page")
+    url: str = Field(
+        description=(
+            "Landing page URL taken from the dataset's official metadata record. "
+            "Empty when no verified URL exists — never a constructed or guessed link."
+        )
+    )
     tags: list[str] = Field(default_factory=list, description="Subject-matter tags")
-    last_updated: Optional[date] = Field(default=None, description="Date of most recent update")
+    last_updated: date | None = Field(default=None, description="Date of most recent update")
+    provenance: str = Field(
+        default="",
+        description="Where the name, URL, dates and frequency came from (e.g. a Data.gov record id)",
+    )
+    source_record_url: str = Field(
+        default="", description="Link to the official metadata record (e.g. the Data.gov dataset page)"
+    )
 
 
 class DatasetField(BaseModel):
@@ -115,12 +126,32 @@ class DatasetDetail(BaseModel):
     source: DataSource
     update_frequency: UpdateFrequency
     url: str
-    last_updated: Optional[date] = None
+    last_updated: date | None = None
     geographic_coverage: str = Field(
         default="National", description="Geographic scope of the data"
     )
     temporal_coverage: str = Field(
         default="Unknown", description="Earliest to latest date range covered"
+    )
+    provenance: str = Field(
+        default="",
+        description="Where the name, URL, dates and frequency came from (e.g. a Data.gov record id)",
+    )
+    source_record_url: str = Field(
+        default="", description="Link to the official metadata record (e.g. the Data.gov dataset page)"
+    )
+    download_urls: list[str] = Field(
+        default_factory=list, description="Download links listed in the official metadata record"
+    )
+    data_dictionary_url: str = Field(
+        default="", description="Data dictionary link from the official metadata record, if any"
+    )
+    fields_verified: bool = Field(
+        default=False,
+        description=(
+            "True only when major_fields were checked against the publisher's data dictionary. "
+            "False means the field list is a summary of the metadata description."
+        ),
     )
 
 
@@ -197,9 +228,9 @@ class FreshnessAssessment(BaseModel):
 
     dataset_id: str
     dataset_name: str
-    last_updated: Optional[date]
+    last_updated: date | None
     update_frequency: UpdateFrequency
-    days_since_update: Optional[int]
+    days_since_update: int | None
     freshness_score: float = Field(ge=0.0, le=100.0)
     freshness_status: FreshnessStatus
     freshness_rationale: str
@@ -282,6 +313,10 @@ class IntentAnalysis(BaseModel):
     scope: str = Field(
         description="Geographic or programmatic scope inferred from the question"
     )
+    premise_note: str = Field(
+        default="",
+        description="Correction shown when the question rests on a common misconception",
+    )
 
 
 class InformationElement(BaseModel):
@@ -298,6 +333,10 @@ class InformationElement(BaseModel):
         default="None",
         description="Quality of coverage: Full | Partial | Proxy | None",
     )
+    rationale: str = Field(
+        default="",
+        description="Why this element received its rating, citing the datasets' source records",
+    )
 
 
 class GapAnalysis(BaseModel):
@@ -313,6 +352,13 @@ class GapAnalysis(BaseModel):
         description="Why the gaps exist (e.g., not collected, not published)"
     )
     impact_on_answer: str = Field(description="How the gaps affect answer quality")
+    gap_evidence: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "For each critical gap, how its absence was checked (searches run against "
+            "SSA's Data.gov catalog, and when)"
+        ),
+    )
 
 
 class Recommendation(BaseModel):
@@ -356,7 +402,7 @@ class AnswerCoverageAssessment(BaseModel):
     """
 
     question: str = Field(description="The original user question")
-    intent: Optional[IntentAnalysis] = Field(
+    intent: IntentAnalysis | None = Field(
         default=None,
         description="Extracted primary intent before dataset matching",
     )
@@ -373,7 +419,7 @@ class AnswerCoverageAssessment(BaseModel):
     available_data: list[str] = Field(
         description="Datasets and fields that contribute to answering"
     )
-    available_data_with_urls: list[dict] = Field(
+    available_data_with_urls: list[dict[str, str]] = Field(
         default_factory=list,
         description=(
             "Available datasets with web links. Each entry has 'name' and 'url' keys. "
@@ -407,6 +453,10 @@ class AnswerCoverageAssessment(BaseModel):
     )
     datasets_consulted: list[str] = Field(
         description="All dataset IDs evaluated during analysis"
+    )
+    rating_note: str = Field(
+        default="",
+        description="Explanation when a rubric rule (e.g. the critical-element cap) adjusted the rating",
     )
 
     @field_validator("answer_coverage_score")
@@ -467,12 +517,15 @@ class AnswerCoverageAssessment(BaseModel):
                 f"**Required data**: {', '.join(self.intent.required_data_types)}",
                 "",
             ]
+            if self.intent.premise_note:
+                lines += [f"**Note on the question**: {self.intent.premise_note}", ""]
 
         lines += [
             "## Answer Coverage",
             "",
             f"**{self.coverage_rating.value}**",
             "",
+            *([f"_{self.rating_note}_", ""] if self.rating_note else []),
             "## Assessment Confidence",
             "",
             f"**{self._confidence_label()}**",
@@ -482,12 +535,13 @@ class AnswerCoverageAssessment(BaseModel):
         ]
         if self.available_data_with_urls:
             # Markdown pipe table — renders correctly in any proportional-font renderer
-            lines.append("| Sl.# | Data | Web Link |")
-            lines.append("|------|------|----------|")
+            lines.append("| Sl.# | Data | Web Link | Source Record |")
+            lines.append("|------|------|----------|---------------|")
             for idx, entry in enumerate(self.available_data_with_urls, start=1):
                 name = entry.get("name", "")
-                url = entry.get("url", "")
-                lines.append(f"| {idx} | {name} | {url} |")
+                url = entry.get("url", "") or "_(no verified link)_"
+                provenance = entry.get("provenance", "") or "_(unverified)_"
+                lines.append(f"| {idx} | {name} | {url} | {provenance} |")
         else:
             display_available = [
                 item for item in self.available_data
@@ -517,6 +571,9 @@ class AnswerCoverageAssessment(BaseModel):
             lines.append("")
             for g in self.gap_analysis.critical_gaps:
                 lines.append(f"- {g}")
+                evidence = self.gap_analysis.gap_evidence.get(g)
+                if evidence:
+                    lines.append(f"  - *Checked:* {evidence}")
             lines.append("")
         if self.gap_analysis.partial_gaps:
             lines.append("**Partial gaps** (data exists but incomplete):")
@@ -525,6 +582,25 @@ class AnswerCoverageAssessment(BaseModel):
                 lines.append(f"- {g}")
             lines.append("")
         lines.append(f"**Impact**: {self.gap_analysis.impact_on_answer}")
+
+        # Per-element rating rationale — makes every judgement call visible.
+        if self.required_information_elements:
+            lines += [
+                "",
+                "## How Each Element Was Rated",
+                "",
+                "| Information needed | Rating | Why |",
+                "|--------------------|--------|-----|",
+            ]
+            for el in self.required_information_elements:
+                why = (el.rationale or "No rationale recorded.").replace("|", "/")
+                lines.append(f"| {el.element} | {el.coverage_quality} | {why} |")
+            lines += [
+                "",
+                "_Full: measured directly at the needed detail. Partial: measured but missing a "
+                "level, breakdown or period. Proxy: only indirect, one-time or discontinued data. "
+                "None: no SSA dataset found (searches recorded)._",
+            ]
 
         # Structured recommendations grouped by category, numbered globally
         if self.structured_recommendations:
@@ -552,6 +628,14 @@ class AnswerCoverageAssessment(BaseModel):
             "## Potential Impact",
             "",
             self.potential_impact,
+        ]
+
+        lines += [
+            "",
+            "---",
+            "_Assessment basis: official dataset metadata (SSA's Data.gov records), recorded "
+            "Data.gov searches for each gap, and curated analyst notes. Dataset contents were "
+            "not downloaded or inspected._",
         ]
         return "\n".join(lines)
 
@@ -588,14 +672,14 @@ class TransparencyImprovementPlan(BaseModel):
 class DiscoverDatasetsInput(BaseModel):
     """Input for discover_disability_datasets tool."""
 
-    query: Optional[str] = Field(
+    query: str | None = Field(
         default=None,
         description=(
             "Optional keyword or topic filter (e.g., 'SSDI', 'field office', 'appeals'). "
             "Leave blank to retrieve the full catalog."
         ),
     )
-    source_filter: Optional[DataSource] = Field(
+    source_filter: DataSource | None = Field(
         default=None,
         description="Restrict results to a specific data source portal.",
     )
@@ -611,7 +695,7 @@ class ExplainDatasetInput(BaseModel):
     dataset_id: str = Field(
         description=(
             "Unique dataset slug from discover_disability_datasets "
-            "(e.g., 'ssa-odar-pending-cases')."
+            "(e.g., 'ssa-hearing-office-workload')."
         )
     )
 
@@ -678,7 +762,7 @@ class RecommendTransparencyInput(BaseModel):
             "for generating targeted transparency recommendations."
         ),
     )
-    focus_area: Optional[str] = Field(
+    focus_area: str | None = Field(
         default=None,
         description=(
             "Optional focus area to scope recommendations "
@@ -701,7 +785,7 @@ class DiscoverDatasetsResult(BaseModel):
 
     datasets: list[DatasetSummary]
     total_found: int
-    query_applied: Optional[str]
+    query_applied: str | None
     source_note: str
 
 
@@ -717,4 +801,4 @@ class AnyToolResult(BaseModel):
 
     success: bool = True
     data: Any = None
-    error: Optional[str] = None
+    error: str | None = None

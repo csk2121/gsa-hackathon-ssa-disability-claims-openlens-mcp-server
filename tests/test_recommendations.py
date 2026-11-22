@@ -12,9 +12,8 @@ Tests:
 
 from __future__ import annotations
 
-import pytest
-
 from src.ssa_disability_claims_openlens.models import RecommendationPriority
+from src.ssa_disability_claims_openlens.services import recommendation_service as rs
 from src.ssa_disability_claims_openlens.services.recommendation_service import (
     RecommendationService,
 )
@@ -130,3 +129,60 @@ class TestRecommendTransparencyImprovements:
         )
         assert plan.total_recommendations == len(plan.recommendations)
         assert plan.high_priority_count >= 0
+
+
+# ── Gap-driven context and keyword matching ───────────────────────────────────
+
+
+class TestGapNamedContext:
+    def test_only_recommendations_for_named_gaps_are_returned(
+        self, recommendation_service: RecommendationService
+    ) -> None:
+        gaps = {
+            "Disability claim processing times",
+            "Field office operational metrics (staffing, volume, wait times)",
+        }
+        plan = recommendation_service.generate_recommendations(
+            context="Gaps found: " + "; ".join(sorted(gaps)) + ". Hearing offices are not mapped.",
+            focus_area="processing times",
+            max_recommendations=10,
+        )
+        assert plan.recommendations
+        assert {r.closes_gap for r in plan.recommendations} <= gaps
+
+    def test_office_decision_time_gap_has_recommendations(
+        self, recommendation_service: RecommendationService
+    ) -> None:
+        plan = recommendation_service.generate_recommendations(
+            context="Gap: Disability decision times by field office or DDS"
+        )
+        assert plan.recommendations
+        assert all(
+            r.closes_gap == "Disability decision times by field office or DDS"
+            for r in plan.recommendations
+        )
+
+
+class TestKeywordMatching:
+    def test_short_keywords_do_not_match_inside_words(self) -> None:
+        assert not rs._keyword_in_text("ssi", "processing")
+        assert not rs._keyword_in_text("ratio", "operational metrics")
+
+    def test_keywords_match_plurals_and_stems(self) -> None:
+        assert rs._keyword_in_text("time", "processing times")
+        assert rs._keyword_in_text("wait", "people waiting")
+        assert rs._keyword_in_text("disparit", "racial disparities")
+
+    def test_focus_area_names_a_topic_with_spaces_or_plurals(self) -> None:
+        for focus in ("processing_time", "processing time", "Processing Times", "processing-time"):
+            assert rs._focus_matches_topic(focus, "processing_time"), focus
+        assert not rs._focus_matches_topic("processing times", "staffing_workload")
+
+
+def test_field_office_recommendations_cite_the_datasets_they_extend() -> None:
+    """The locator is a contact list; recs about visits, staff or waits extend other datasets."""
+    topic = next(t for t in rs._RECOMMENDATION_KB if t["topic"] == "field_office_access")
+    for rec in topic["recommendations"]:
+        if rec.closes_gap == "SSA field office locations and coverage":
+            continue
+        assert rec.affected_datasets != ["ssa-field-office-locator"], rec.title

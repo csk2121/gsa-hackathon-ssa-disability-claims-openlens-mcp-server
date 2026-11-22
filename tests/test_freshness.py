@@ -14,8 +14,6 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-import pytest
-
 from src.ssa_disability_claims_openlens.models import FreshnessStatus, UpdateFrequency
 from src.ssa_disability_claims_openlens.services.dataset_analysis_service import (
     DatasetAnalysisService,
@@ -83,11 +81,11 @@ class TestAssessDatasetFreshness:
         catalog_service: DatasetCatalogService,
         analysis_service: DatasetAnalysisService,
     ) -> None:
-        """SSI recipients dataset is monthly — should have high freshness score."""
+        """SSI recipients dataset is annual (per its Data.gov record)."""
         detail = catalog_service.get_dataset_detail("ssa-ssi-recipients-by-state")
         assert detail is not None
         assessment = analysis_service.assess_freshness(detail)
-        # Monthly dataset updated Oct 2024 should still be reasonably fresh
+        assert detail.update_frequency == UpdateFrequency.ANNUALLY
         assert assessment.freshness_score >= 0.0  # At minimum it should not error
 
     def test_analyst_notes_populated(
@@ -95,7 +93,7 @@ class TestAssessDatasetFreshness:
         catalog_service: DatasetCatalogService,
         analysis_service: DatasetAnalysisService,
     ) -> None:
-        detail = catalog_service.get_dataset_detail("ssa-odar-pending-cases")
+        detail = catalog_service.get_dataset_detail("ssa-hearing-office-workload")
         assert detail is not None
         assessment = analysis_service.assess_freshness(detail)
         assert len(assessment.analyst_notes) > 10
@@ -118,7 +116,7 @@ class TestAssessDatasetFreshness:
         analysis_service: DatasetAnalysisService,
     ) -> None:
         """format_report() should produce a single markdown string with all sections."""
-        detail = catalog_service.get_dataset_detail("ssa-disability-research-statistics")
+        detail = catalog_service.get_dataset_detail("ssa-di-annual-statistical-report")
         assert detail is not None
         assessment = analysis_service.assess_freshness(detail)
         report = assessment.format_report()
@@ -155,7 +153,7 @@ class TestAssessDatasetFreshness:
         Rationale and analyst notes must arrive as separate lines, not collapsed
         into a single run-on sentence (the core formatting bug being fixed).
         """
-        detail = catalog_service.get_dataset_detail("ssa-disability-research-statistics")
+        detail = catalog_service.get_dataset_detail("ssa-di-annual-statistical-report")
         assert detail is not None
         assessment = analysis_service.assess_freshness(detail)
         report = assessment.format_report()

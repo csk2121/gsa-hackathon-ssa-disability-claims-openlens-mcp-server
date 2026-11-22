@@ -12,8 +12,6 @@ Tests:
 
 from __future__ import annotations
 
-import pytest
-
 from src.ssa_disability_claims_openlens.models import CompletenessAnalysis
 from src.ssa_disability_claims_openlens.services.dataset_analysis_service import (
     DatasetAnalysisService,
@@ -26,12 +24,12 @@ from src.ssa_disability_claims_openlens.services.dataset_catalog_service import 
 class TestAnalyzeDatasetCompleteness:
     PROFILED_IDS = [
         "ssa-oasdi-beneficiaries-by-state",
-        "ssa-odar-pending-cases",
-        "ssa-disability-applications-decisions",
-        "ssa-field-office-locator",
-        "ssa-disability-research-statistics",
         "ssa-ssi-recipients-by-state",
-        "data-gov-ssa-performance",
+        "ssa-di-annual-statistical-report",
+        "ssa-disability-claim-data",
+        "ssa-state-agency-workload-data",
+        "ssa-hearing-office-workload",
+        "ssa-field-office-locator",
     ]
 
     def test_returns_analysis_for_all_profiled_datasets(
@@ -87,23 +85,24 @@ class TestAnalyzeDatasetCompleteness:
         analysis = analysis_service.analyze_completeness(detail)
         assert analysis.operational_coverage.score < 50.0
 
-    def test_applications_dataset_has_low_geographic_score(
+    def test_claim_data_is_state_level(
         self,
         catalog_service: DatasetCatalogService,
         analysis_service: DatasetAnalysisService,
     ) -> None:
-        """Applications/decisions dataset is national only — geographic score should be low."""
-        detail = catalog_service.get_dataset_detail("ssa-disability-applications-decisions")
+        """SSA Disability Claim Data (US-GOV-SSA-308) is published by state, not national-only."""
+        detail = catalog_service.get_dataset_detail("ssa-disability-claim-data")
         assert detail is not None
         analysis = analysis_service.analyze_completeness(detail)
-        assert analysis.geographic_coverage.score < 40.0
+        assert "State" in analysis.geographic_coverage.details
+        assert analysis.geographic_coverage.score >= 50.0
 
     def test_missing_dimensions_are_strings(
         self,
         catalog_service: DatasetCatalogService,
         analysis_service: DatasetAnalysisService,
     ) -> None:
-        detail = catalog_service.get_dataset_detail("ssa-odar-pending-cases")
+        detail = catalog_service.get_dataset_detail("ssa-hearing-office-workload")
         assert detail is not None
         analysis = analysis_service.analyze_completeness(detail)
         assert all(isinstance(d, str) for d in analysis.missing_dimensions)
@@ -113,7 +112,7 @@ class TestAnalyzeDatasetCompleteness:
         catalog_service: DatasetCatalogService,
         analysis_service: DatasetAnalysisService,
     ) -> None:
-        detail = catalog_service.get_dataset_detail("ssa-odar-pending-cases")
+        detail = catalog_service.get_dataset_detail("ssa-hearing-office-workload")
         assert detail is not None
         analysis = analysis_service.analyze_completeness(detail)
         assert len(analysis.analyst_notes) > 10

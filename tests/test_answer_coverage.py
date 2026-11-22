@@ -15,8 +15,6 @@ Tests:
 
 from __future__ import annotations
 
-import pytest
-
 from src.ssa_disability_claims_openlens.models import CoverageRating
 from src.ssa_disability_claims_openlens.services.answer_coverage_service import (
     AnswerCoverageEngine,
@@ -94,10 +92,12 @@ class TestEvaluateAnswerCoverage:
         assessment = coverage_engine.evaluate(
             "How long are appointment wait times at SSA field offices?"
         )
-        assert any(
-            "appointment" in m.lower() or "wait" in m.lower()
-            for m in assessment.missing_information
-        ), "Field office appointment wait times should be identified as missing"
+        # Only a discontinued national series exists (US-GOV-SSA-431), so the
+        # element is a partial gap rather than wholly missing.
+        gaps = assessment.gap_analysis.critical_gaps + assessment.gap_analysis.partial_gaps
+        assert "Field office appointment wait times" in gaps, (
+            "Field office appointment wait times should be identified as a gap"
+        )
 
     def test_gap_analysis_populated(
         self, coverage_engine: AnswerCoverageEngine

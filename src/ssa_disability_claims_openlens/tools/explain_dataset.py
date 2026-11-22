@@ -7,6 +7,8 @@ use cases, and known limitations.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastmcp import FastMCP
 
 from ..models import ExplainDatasetInput, ExplainDatasetResult
@@ -27,7 +29,7 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             "Requires a dataset_id from discover_disability_datasets."
         ),
     )
-    def explain_dataset(dataset_id: str) -> dict:  # type: ignore[return]
+    def explain_dataset(dataset_id: str) -> dict[str, Any]:
         """Explain a dataset's contents, fields, use cases, and limitations."""
         try:
             ExplainDatasetInput(dataset_id=dataset_id)  # Validate input
@@ -53,7 +55,10 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
                 f"It covers {detail.geographic_coverage} from {detail.temporal_coverage}. "
                 f"Key fields include: {field_summary}. "
                 f"The dataset has {limitation_count} known limitation(s) — "
-                f"notably: {detail.limitations[0] if detail.limitations else 'none documented'}."
+                f"notably: {detail.limitations[0] if detail.limitations else 'none documented'}. "
+                f"Source: {detail.provenance or 'unverified'}"
+                + ("" if detail.fields_verified or not detail.major_fields
+                   else " Field list not yet checked against the data dictionary.")
             )
 
             result = ExplainDatasetResult(dataset=detail, analyst_summary=analyst_summary)

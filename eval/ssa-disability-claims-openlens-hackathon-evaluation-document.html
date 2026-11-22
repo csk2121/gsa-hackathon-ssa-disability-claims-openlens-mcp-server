@@ -40,20 +40,20 @@
 <div class="page">
 
   <h1>SSA Disability Claims OpenLens</h1>
-  <div class="subtitle">MCP Dataset Access Server — GSA Hackathon Evaluation Document  •  Branch: test-v1  •  85 tests passing</div>
+  <div class="subtitle">MCP Dataset Access Server — GSA Hackathon Evaluation Document  •  Branch: test-v1  •  280 tests passing</div>
 
   
   <div class="kpi-grid">
     <div class="kpi"><div class="kpi-num">7</div><div class="kpi-label">MCP Tools</div></div>
-    <div class="kpi"><div class="kpi-num">8</div><div class="kpi-label">Datasets</div></div>
-    <div class="kpi"><div class="kpi-num">27</div><div class="kpi-label">Coverage KB Elements</div></div>
-    <div class="kpi"><div class="kpi-num">85</div><div class="kpi-label">Tests Passing</div></div>
+    <div class="kpi"><div class="kpi-num">21</div><div class="kpi-label">Datasets</div></div>
+    <div class="kpi"><div class="kpi-num">31</div><div class="kpi-label">Coverage KB Elements</div></div>
+    <div class="kpi"><div class="kpi-num">280</div><div class="kpi-label">Tests Passing</div></div>
   </div>
   <div class="kpi-grid">
-    <div class="kpi"><div class="kpi-num">7</div><div class="kpi-label">Intent Categories</div></div>
-    <div class="kpi"><div class="kpi-num">8</div><div class="kpi-label">Recommendation Topics</div></div>
-    <div class="kpi"><div class="kpi-num">30+</div><div class="kpi-label">Recommendations in KB</div></div>
-    <div class="kpi"><div class="kpi-num">8</div><div class="kpi-label">Test Modules</div></div>
+    <div class="kpi"><div class="kpi-num">8</div><div class="kpi-label">Intent Categories</div></div>
+    <div class="kpi"><div class="kpi-num">9</div><div class="kpi-label">Recommendation Topics</div></div>
+    <div class="kpi"><div class="kpi-num">30</div><div class="kpi-label">Recommendations in KB</div></div>
+    <div class="kpi"><div class="kpi-num">12</div><div class="kpi-label">Test Modules</div></div>
   </div>
 
   
@@ -89,17 +89,31 @@
   </table>
 
   
-  <h2>4. Dataset Catalog (8 datasets)</h2>
+  <h2>4. Dataset Catalog (21 datasets)</h2>
+  <p class="section-note">Names, links, dates, frequencies and coverage periods come from each dataset's official Data.gov record (snapshot written by <code>scripts/sync_catalog.py</code>); only analyst notes are hand-written. Tests fail if the server can show a URL that is not in a source record.</p>
   <table>
-    <tr><th>Dataset ID</th><th>Name</th><th>Source</th><th>Frequency</th><th>Geographic Coverage</th><th>Temporal</th></tr>
-    <tr><td><code>ssa-oasdi-beneficiaries-by-state</code></td><td>OASDI Beneficiaries by State &amp; County</td><td>SSA Open Data</td><td>Annual</td><td>State &amp; county</td><td>1970–present</td></tr>
-    <tr><td><code>ssa-odar-pending-cases</code></td><td>ODAR Pending Cases by Hearing Office</td><td>SSA Open Data</td><td>Monthly</td><td>All ODAR hearing offices</td><td>2007–present</td></tr>
-    <tr><td><code>ssa-disability-applications-decisions</code></td><td>SSI/SSDI Applications and Decisions</td><td>SSA Open Data</td><td>Annual</td><td>National</td><td>1960–2023</td></tr>
-    <tr><td><code>ssa-field-office-locator</code></td><td>SSA Field Office Locations</td><td>SSA Open Data</td><td>Quarterly</td><td>All 50 states, DC, territories</td><td>Current snapshot</td></tr>
-    <tr><td><code>ssa-disability-research-statistics</code></td><td>SSA Disability Research Statistics</td><td>SSA Open Data</td><td>Annual</td><td>State-level</td><td>1970–2023</td></tr>
-    <tr><td><code>ssa-ssi-recipients-by-state</code></td><td>SSI Recipients by State &amp; County</td><td>SSA Open Data</td><td>Monthly</td><td>All 50 states, DC, territories</td><td>2008–present</td></tr>
-    <tr><td><code>ssa-red-book</code></td><td>SSA Red Book — Work Incentives</td><td>SSA Open Data</td><td>Annual</td><td>National</td><td>1960–present</td></tr>
-    <tr><td><code>data-gov-ssa-performance</code></td><td>SSA Annual Performance Report</td><td>Data.gov</td><td>Annual</td><td>National</td><td>2003–2023</td></tr>
+    <tr><th>Dataset ID</th><th>Name</th><th>Data.gov record</th><th>Frequency</th><th>Geographic Coverage</th><th>Temporal</th></tr>
+    <tr><td><code>ssa-oasdi-beneficiaries-by-state</code></td><td>OASDI Beneficiaries by State and County (series)</td><td>US-GOV-SSA-3378</td><td>Annually</td><td>State and county</td><td>1999–2024</td></tr>
+    <tr><td><code>ssa-ssi-recipients-by-state</code></td><td>SSI Recipients by State and County (series)</td><td>US-GOV-SSA-3414</td><td>Annually</td><td>State and county</td><td>1998–2024</td></tr>
+    <tr><td><code>ssa-di-annual-statistical-report</code></td><td>Annual Statistical Report on the Social Security Disability Insurance Program</td><td>US-GOV-SSA-1667</td><td>Annually</td><td>Not stated in the source record — check the report&#x27;s table list</td><td>1960–2025</td></tr>
+    <tr><td><code>ssa-disability-claim-data</code></td><td>SSA Disability Claim Data</td><td>US-GOV-SSA-308</td><td>Annually</td><td>State</td><td>2000 onward (per Data.gov record; end date not stated)</td></tr>
+    <tr><td><code>ssa-state-agency-workload-data</code></td><td>SSA State Agency Workload Data</td><td>US-GOV-SSA-307</td><td>Monthly</td><td>State</td><td>1999 onward (per Data.gov record; end date not stated)</td></tr>
+    <tr><td><code>ssa-hearing-office-workload</code></td><td>Hearing Office Workload Data - Current Report</td><td>US-GOV-SSA-303</td><td>Monthly</td><td>Each OHO hearing office</td><td>Not stated in the Data.gov record</td></tr>
+    <tr><td><code>ssa-hearing-wait-time</code></td><td>Average Wait Time Until Hearing Held Report - Current Report</td><td>US-GOV-SSA-304</td><td>Monthly</td><td>OHO hearing offices (level of aggregation: see data dictionary)</td><td>Not stated in the Data.gov record</td></tr>
+    <tr><td><code>ssa-field-office-locator</code></td><td>Field Office Contact Information</td><td>US-GOV-SSA-1733</td><td>Quarterly</td><td>All SSA field offices</td><td>Not stated in the Data.gov record</td></tr>
+    <tr><td><code>ssa-field-office-visitors</code></td><td>Field Office Visitors (Average Daily) - FY 2006 On</td><td>US-GOV-SSA-434</td><td>Annually</td><td>Not stated in the source record (national vs. per office — check the data page)</td><td>2005 onward (per Data.gov record; end date not stated)</td></tr>
+    <tr><td><code>ssa-initial-disability-processing-time</code></td><td>Combined Title II Disability and Title XVI Blind and Disabled Average Processing Time - FY 2016 On</td><td>US-GOV-SSA-1409</td><td>Monthly</td><td>Not stated in the source record (check the data page for national vs. state)</td><td>2015 onward (per Data.gov record; end date not stated)</td></tr>
+    <tr><td><code>ssa-reconsideration-processing-time</code></td><td>Disability Reconsideration Average Processing Time (Excludes technical denials) - FY2014 On</td><td>US-GOV-SSA-1768</td><td>Annually</td><td>Not stated in the source record</td><td>2013 onward (per Data.gov record; end date not stated)</td></tr>
+    <tr><td><code>ssa-alj-disposition-data</code></td><td>ALJ Disposition Data - Current Report</td><td>US-GOV-SSA-299</td><td>Monthly</td><td>Each ALJ and hearing office</td><td>Not stated in the Data.gov record</td></tr>
+    <tr><td><code>ssa-dds-accuracy</code></td><td>Disability Determination Services (DDS) Accuracy</td><td>US-GOV-SSA-344</td><td>Annually</td><td>Not stated in the source record (check the data page for national vs. state)</td><td>2006 onward (per Data.gov record; end date not stated)</td></tr>
+    <tr><td><code>ssa-ticket-to-work-fy11-17</code></td><td>Ticket to Work FY11-17</td><td>US-GOV-SSA-1915</td><td>Unknown</td><td>Not stated in the source record</td><td>2010–2017</td></tr>
+    <tr><td><code>ssa-national-beneficiary-survey</code></td><td>National Beneficiary Survey: Disability Statistics (series)</td><td>US-GOV-SSA-3379</td><td>Irregular</td><td>Not stated in the source record</td><td>2015–2019</td></tr>
+    <tr><td><code>ssa-field-office-employee-counts-2016</code></td><td>2016 Field Office Employee Counts</td><td>US-GOV-SSA-1918</td><td>Unknown</td><td>Each field office (per dataset title)</td><td>2015–2016</td></tr>
+    <tr><td><code>ssa-field-office-visitor-counts-2016</code></td><td>2016 Field Office Visitor Counts</td><td>US-GOV-SSA-1917</td><td>Unknown</td><td>Field offices (per dataset title)</td><td>2015–2016</td></tr>
+    <tr><td><code>ssa-field-office-appointments-21-days</code></td><td>Percentage of Field Office Claims Appointments Scheduled Within 21 Days - FY 2005-2015</td><td>US-GOV-SSA-431</td><td>Monthly</td><td>Not stated in the source record</td><td>2004–2015</td></tr>
+    <tr><td><code>ssa-di-ssi-participants-employment-2015</code></td><td>DI &amp; SSI Program Participants: Characteristics &amp; Employment, 2015</td><td>US-GOV-SSA-2278</td><td>Unknown</td><td>Not stated in the source record</td><td>2015–2015</td></tr>
+    <tr><td><code>ssa-nscf</code></td><td>National Survey of SSI Children and Families (NSCF)</td><td>US-GOV-SSA-328</td><td>Irregular</td><td>Continental United States (excludes Alaska, Hawaii and territories)</td><td>Not stated in the Data.gov record</td></tr>
+    <tr><td><code>ssa-red-book</code></td><td>Red Book: A Guide to Work Incentives</td><td>Manual check</td><td>Unknown</td><td>National (policy applies uniformly)</td><td>Not applicable (policy reference)</td></tr>
   </table>
 
   
@@ -125,11 +139,12 @@
     <tr><td>Partial, High, or Complete coverage</td><td><span class="badge badge-high">High</span></td></tr>
   </table>
 
-  <h3>Intent Categories (7)</h3>
+  <h3>Intent Categories (8)</h3>
   <table>
     <tr><th>Category</th><th>Example Question Pattern</th><th>Scope</th></tr>
     <tr><td><strong>Access</strong></td><td>Which field offices have the highest service demand? What should SSA publish?</td><td>Field office, national</td></tr>
-    <tr><td><strong>Equity</strong></td><td>Are there racial disparities in disability allowance rates?</td><td>National</td></tr>
+    <tr><td><strong>Policy</strong></td><td>What data should SSA publish first to improve public understanding?</td><td>National</td></tr>
+    <tr><td><strong>Equity</strong></td><td>Are there racial disparities in disability allowance rates?</td><td>National &amp; state</td></tr>
     <tr><td><strong>Performance</strong></td><td>How long are processing times by state?</td><td>State level</td></tr>
     <tr><td><strong>Finance</strong></td><td>Is SSI benefit adequacy sufficient relative to poverty levels?</td><td>National &amp; state</td></tr>
     <tr><td><strong>Outcomes</strong></td><td>What are the return-to-work outcomes for Ticket to Work participants?</td><td>National</td></tr>
@@ -137,41 +152,56 @@
     <tr><td><strong>Geographic Equity</strong></td><td>Are there regional disparities in disability service distribution?</td><td>County &amp; regional</td></tr>
   </table>
 
-  <h3>Coverage KB Elements (27)</h3>
+    <h3>Rating Rubric</h3>
   <table>
-    <tr><th>Element</th><th>Quality</th><th>Weight</th></tr>
-    <tr><td>Disability claim processing times</td><td><span class="badge badge-partial">Partial</span></td><td>Critical (2)</td></tr>
-    <tr><td>Hearing-level wait times</td><td><span class="badge badge-partial">Partial</span></td><td>Critical (2)</td></tr>
-    <tr><td>Field office appointment &amp; walk-in volume</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td></tr>
-    <tr><td>Geographic disaggregation of outcomes</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
-    <tr><td>SSA field office locations and coverage</td><td><span class="badge badge-full">Full</span></td><td>Supporting (1)</td></tr>
-    <tr><td>Field office operational metrics</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td></tr>
-    <tr><td>SSA office staffing levels</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td></tr>
-    <tr><td>Office workload and capacity</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td></tr>
-    <tr><td>Applicant age distribution</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
-    <tr><td>Gender disaggregation</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
-    <tr><td>Race and ethnicity data</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td></tr>
-    <tr><td>Applicant income and economic status</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td></tr>
-    <tr><td>Impairment/diagnosis categories</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
-    <tr><td>Disability program allowance rates</td><td><span class="badge badge-partial">Partial</span></td><td>Critical (2)</td></tr>
-    <tr><td>Application volumes</td><td><span class="badge badge-full">Full</span></td><td>Supporting (1)</td></tr>
-    <tr><td>Benefit amounts by geography &amp; demographics</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
-    <tr><td>Beneficiary/recipient counts</td><td><span class="badge badge-full">Full</span></td><td>Supporting (1)</td></tr>
-    <tr><td>Appeals and hearing outcomes</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
-    <tr><td>Work incentive program participation</td><td><span class="badge badge-proxy">Proxy</span></td><td>Supporting (1)</td></tr>
-    <tr><td>Agency performance metrics</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
-    <tr><td>SSI program data</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
-    <tr><td>SSDI program data</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td></tr>
-    <tr><td>Geographic distribution of disability service access</td><td><span class="badge badge-partial">Partial</span></td><td>Critical (2)</td></tr>
-    <tr><td>Travel distance to nearest SSA field office</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td></tr>
-    <tr><td>Field office service area boundaries</td><td><span class="badge badge-none">None</span></td><td>Supporting (1)</td></tr>
-    <tr><td>Accessibility accommodations at field offices</td><td><span class="badge badge-none">None</span></td><td>Supporting (1)</td></tr>
-    <tr><td>Disability application counts by county</td><td><span class="badge badge-proxy">Proxy</span></td><td>Supporting (1)</td></tr>
+    <tr><th>Rating</th><th>Rule (enforced by tests)</th></tr>
+    <tr><td><span class="badge badge-full">Full</span></td><td>A catalogued dataset directly measures it at the needed detail, and is current</td></tr>
+    <tr><td><span class="badge badge-partial">Partial</span></td><td>Measured, but missing a needed level, breakdown, distribution or period</td></tr>
+    <tr><td><span class="badge badge-proxy">Proxy</span></td><td>Only indirect, one-time, historical or discontinued data</td></tr>
+    <tr><td><span class="badge badge-none">None</span></td><td>No SSA dataset on Data.gov — backed by recorded searches</td></tr>
+  </table>
+  <p class="section-note">Critical-element cap: a question cannot be rated higher than its best critical element allows (all critical elements Proxy/None → at most Limited; best Partial → at most Partial). Questions are matched in both their original and singularised forms; the scope comes from the question's own wording.</p>
+
+  <h3>Coverage KB Elements (31)</h3>
+  <p class="section-note">Every element rated None is backed by recorded Data.gov searches (<code>data/gap_evidence.json</code>), re-run weekly by <code>scripts/check_gap_claims.py</code>; the report shows the evidence under each critical gap.</p>
+  <table>
+    <tr><th>Element</th><th>Rating</th><th>Weight</th><th>Why (shown in every report)</th></tr>
+    <tr><td>Disability claim processing times</td><td><span class="badge badge-partial">Partial</span></td><td>Critical (2)</td><td>Average processing times are published for initial claims (US-GOV-SSA-1409), reconsiderations (US-GOV-SSA-1768) and hearings (US-GOV-SSA-303, -304), but only as averages, with no state breakdown described for initial claims.</td></tr>
+    <tr><td>Hearing-level wait times</td><td><span class="badge badge-partial">Partial</span></td><td>Critical (2)</td><td>Average processing time per hearing office and average months to a hearing are published monthly (US-GOV-SSA-303, -304); no distributions.</td></tr>
+    <tr><td>Linked claim history across decision levels</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td><td>Each decision level publishes its own counts and average times for different groups of claims (US-GOV-SSA-307, -299, -1409, -1768, -304). They cannot be linked to follow the same claims, so final rates and total waits can only be approximated.</td></tr>
+    <tr><td>Field office appointment and walk-in volume</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td><td>Average daily visitors is published (US-GOV-SSA-434), but per-office visitor counts exist only for FY2016 (US-GOV-SSA-1917), and appointment volumes are not published.</td></tr>
+    <tr><td>Field office appointment wait times</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td><td>Only a discontinued series exists: the share of claims appointments scheduled within 21 days, FY2005–2015 (US-GOV-SSA-431). No current or per-office wait times.</td></tr>
+    <tr><td>Geographic disaggregation of outcomes</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td><td>Claims and allowances are published by state (US-GOV-SSA-307, -308) and beneficiaries by state and county (US-GOV-SSA-3378, -3414); claim outcomes stop at state level.</td></tr>
+    <tr><td>SSA field office locations and coverage</td><td><span class="badge badge-full">Full</span></td><td>Supporting (1)</td><td>Locations, phone numbers and hours of every field office are published and updated quarterly (US-GOV-SSA-1733).</td></tr>
+    <tr><td>Field office operational metrics (staffing, volume, wait times)</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td><td>Per-office staffing and visitor counts exist for FY2016 only (FOIA releases US-GOV-SSA-1917, -1918); there is no current per-office series.</td></tr>
+    <tr><td>SSA office staffing levels</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td><td>Field office employee counts were released once, for FY2016 (US-GOV-SSA-1918); no hearing office staffing data is in the catalog.</td></tr>
+    <tr><td>Office workload and capacity</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td><td>Workload volumes are published for hearing offices (US-GOV-SSA-303) and state agencies (US-GOV-SSA-307), but without staffing or capacity to relate them to.</td></tr>
+    <tr><td>Applicant age distribution</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td><td>The SSDI Annual Statistical Report gives demographic statistics on beneficiaries (US-GOV-SSA-1667); applicant age is not in the claim-level datasets.</td></tr>
+    <tr><td>Gender disaggregation</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td><td>Beneficiary demographics are in the SSDI Annual Statistical Report (US-GOV-SSA-1667); no claim-level dataset is described with a sex breakdown.</td></tr>
+    <tr><td>Race and ethnicity data</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td><td>No SSA dataset on Data.gov reports race or ethnicity (see search evidence).</td></tr>
+    <tr><td>Income and economic status of applicants and recipients</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td><td>The only source is a one-time 2001–2002 survey of SSI children and families, including applicants (US-GOV-SSA-328). No adult or current data on applicant or recipient income.</td></tr>
+    <tr><td>Impairment/diagnosis categories</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td><td>Beneficiary statistics are in the SSDI Annual Statistical Report (US-GOV-SSA-1667); no claim-level dataset is described with diagnosis categories.</td></tr>
+    <tr><td>Disability program allowance rates</td><td><span class="badge badge-partial">Partial</span></td><td>Critical (2)</td><td>Allowances are published by state for initial and reconsideration decisions (US-GOV-SSA-307, -308) and by judge and hearing office for hearings (US-GOV-SSA-299); the levels are not linked and nothing goes below state level.</td></tr>
+    <tr><td>Reasons for claim denials</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td><td>No SSA dataset on Data.gov reports denial reasons (see search evidence).</td></tr>
+    <tr><td>Application volumes</td><td><span class="badge badge-full">Full</span></td><td>Supporting (1)</td><td>Initial claim receipts are published by state, monthly from October 2000 (US-GOV-SSA-307) and by fiscal year (US-GOV-SSA-308).</td></tr>
+    <tr><td>Benefit amounts by geography and demographics</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td><td>Benefit statistics are in the state/county and annual SSDI reports (US-GOV-SSA-3378, -1667); which amount breakdowns they include has not been checked against the tables.</td></tr>
+    <tr><td>Beneficiary/recipient counts</td><td><span class="badge badge-full">Full</span></td><td>Supporting (1)</td><td>Beneficiary and recipient counts are published annually by state and county (US-GOV-SSA-3378, -3414).</td></tr>
+    <tr><td>Appeals and hearing outcomes</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td><td>Hearing outcomes by judge and office (US-GOV-SSA-299), hearing workloads and waits (US-GOV-SSA-303, -304) and reconsideration outcomes by state (US-GOV-SSA-307) are published; Appeals Council and court outcomes are not in the catalog.</td></tr>
+    <tr><td>Work incentive program participation</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td><td>Ticket assignments were released for FY2011–2017 only (US-GOV-SSA-1915); survey statistics on program participation exist for 2015 and 2019 (US-GOV-SSA-3379).</td></tr>
+    <tr><td>Return-to-work outcomes</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td><td>Only one-time descriptive sources exist: a 2015 chartbook on work activity before and after award (US-GOV-SSA-2278) and survey statistics for 2015 and 2019 (US-GOV-SSA-3379). No ongoing outcome series.</td></tr>
+    <tr><td>Agency performance metrics</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td><td>Processing times (US-GOV-SSA-1409, -1768, -304) and DDS decision accuracy (US-GOV-SSA-344) are published; performance targets are not in the catalog.</td></tr>
+    <tr><td>SSI program data</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td><td>Recipients, federal payments and state supplementation are published annually by state and county (US-GOV-SSA-3414); no monthly or recipient-level detail.</td></tr>
+    <tr><td>SSDI program data</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td><td>Beneficiaries are published by state and county (US-GOV-SSA-3378) and in the annual SSDI report (US-GOV-SSA-1667); both are annual.</td></tr>
+    <tr><td>Geographic distribution of disability service access</td><td><span class="badge badge-partial">Partial</span></td><td>Critical (2)</td><td>Office locations (US-GOV-SSA-1733) can be joined to county beneficiary counts (US-GOV-SSA-3378, -3414), but there are no service areas, travel times or per-office demand to measure access directly.</td></tr>
+    <tr><td>Travel distance to nearest SSA field office</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td><td>No SSA dataset on Data.gov reports travel distance or time (see search evidence).</td></tr>
+    <tr><td>Field office service area boundaries</td><td><span class="badge badge-none">None</span></td><td>Supporting (1)</td><td>No SSA dataset on Data.gov defines field office service areas (see search evidence).</td></tr>
+    <tr><td>Accessibility accommodations at field offices</td><td><span class="badge badge-none">None</span></td><td>Supporting (1)</td><td>No SSA dataset on Data.gov describes accessibility or accommodations at field offices; only national interpreter call counts exist (see search evidence).</td></tr>
+    <tr><td>Disability application counts by county</td><td><span class="badge badge-proxy">Proxy</span></td><td>Supporting (1)</td><td>Applications are published by state only (US-GOV-SSA-307, -308), a proxy for county detail.</td></tr>
   </table>
 
   
   <h2>6. Freshness Assessment Engine</h2>
-  <p class="section-note">Fully deterministic. Scores based on catalog metadata — not a live SSA source query.</p>
+  <p class="section-note">Fully deterministic. Scores use the last-modified date in each dataset's Data.gov record — not a live SSA source query.</p>
   <table>
     <tr><th>Field</th><th>Description</th></tr>
     <tr><td>Summary Table</td><td>Dataset ID, last updated, update frequency, days since update, freshness score (0–100), status</td></tr>
@@ -189,16 +219,17 @@
   </table>
 
   
-  <h2>7. Recommendation Knowledge Base (8 topics, 30+ recommendations)</h2>
+  <h2>7. Recommendation Knowledge Base (9 topics, 30 recommendations)</h2>
   <table>
     <tr><th>Topic</th><th>Category Labels</th><th>High-Priority Recommendations (sample)</th></tr>
-    <tr><td>Field Office Access</td><td>Operational Metrics, Access Data, Geographic Detail</td><td>Publish monthly visit volumes; publish staffing FTE; publish appointment wait times by office</td></tr>
+    <tr><td>Field Office Access</td><td>Operational Metrics, Access Data, Geographic Detail</td><td>Publish per-office visit volumes and appointment counts (only FY2016 exists); publish staffing FTE every year; publish appointment wait times by office</td></tr>
     <tr><td>Staffing &amp; Workload</td><td>Operational Metrics, Performance</td><td>Publish FTE staffing by office; report adjudicator-to-caseload ratios</td></tr>
-    <tr><td>Processing Time</td><td>Geographic Detail, Temporal Granularity</td><td>Publish state-level initial claim processing times; publish wait-time distributions</td></tr>
+    <tr><td>Processing Time</td><td>Geographic Detail, Temporal Granularity</td><td>Publish state-level initial claim processing times; publish wait-time distributions; track end-to-end processing time</td></tr>
     <tr><td>Demographic Equity</td><td>Demographic Data</td><td>Publish application/award/denial rates by race &amp; ethnicity at all appeal levels</td></tr>
     <tr><td>SSI Adequacy</td><td>Program Outcomes, Finance</td><td>Publish SSI outcomes cross-tabulated with income decile</td></tr>
-    <tr><td>Work Incentives</td><td>Program Outcomes</td><td>Publish Ticket to Work assignment and return-to-work outcomes annually</td></tr>
-    <tr><td>Geographic Equity</td><td>Geographic Detail</td><td>Publish state-level disability allowance rates</td></tr>
+    <tr><td>Work Incentives</td><td>Program Outcomes</td><td>Resume Ticket to Work assignment counts (released only for FY2011–2017) and add return-to-work outcomes</td></tr>
+    <tr><td>Program Outcomes</td><td>Program Outcomes</td><td>Publish outcomes that follow the same claims from application to final decision; publish denial counts by reason</td></tr>
+    <tr><td>Geographic Equity</td><td>Geographic Detail</td><td>Publish county-level initial claim receipts and allowance rates; map hearing offices to the areas they serve (state-level rates are already published)</td></tr>
     <tr><td>Geographic Accessibility</td><td>Geographic Detail, Access Data</td><td>Publish travel distance to nearest office by ZIP/county; publish service area boundaries; publish rural vs. urban wait time breakdowns</td></tr>
   </table>
 
@@ -226,7 +257,7 @@
     <tr><td>MCP Server</td><td>FastMCP / python main.py</td><td>Hosts tools, prompts, resources over stdio</td></tr>
     <tr><td>Engine</td><td>AnswerCoverageEngine</td><td>Deterministic intent + coverage scoring</td></tr>
     <tr><td>Services</td><td>DatasetCatalogService, DatasetAnalysisService, RecommendationService</td><td>Dataset lookup, freshness scoring, recommendation generation</td></tr>
-    <tr><td>Data Sources</td><td>SSA Open Data Portal, Data.gov API</td><td>Live and static dataset catalog</td></tr>
+    <tr><td>Data Sources</td><td>Data.gov DCAT snapshot; Data.gov catalog API v1</td><td>Grounded static catalog (works offline) and live search</td></tr>
   </table>
 
   
@@ -234,20 +265,26 @@
   <table>
     <tr><th>Test Module</th><th>What It Tests</th><th>Status</th></tr>
     <tr><td><code>test_accessibility_equity.py</code></td><td>Rural/urban access questions never return Unsupported (19 regression tests)</td><td><span class="badge badge-high">Passing</span></td></tr>
+    <tr><td><code>test_catalog_grounding.py</code></td><td>Every emitted URL comes from a source record; facts match the Data.gov snapshot; knowledge bases reference real datasets; gap claims have search evidence; live adapter behaviour</td><td><span class="badge badge-high">Passing</span></td></tr>
     <tr><td><code>test_answer_coverage.py</code></td><td>Coverage scoring, ratings, format_report() structure</td><td><span class="badge badge-high">Passing</span></td></tr>
+    <tr><td><code>test_benchmark.py</code></td><td>Every reviewed benchmark question gets its expected rating and cites its key datasets</td><td><span class="badge badge-high">Passing</span></td></tr>
     <tr><td><code>test_compare.py</code></td><td>Dataset comparison, shared dimensions, integration opportunities</td><td><span class="badge badge-high">Passing</span></td></tr>
     <tr><td><code>test_completeness.py</code></td><td>Completeness scoring for known datasets</td><td><span class="badge badge-high">Passing</span></td></tr>
     <tr><td><code>test_discovery.py</code></td><td>Keyword search, source filter, tag filter</td><td><span class="badge badge-high">Passing</span></td></tr>
     <tr><td><code>test_explain.py</code></td><td>Dataset explanation structure and field presence</td><td><span class="badge badge-high">Passing</span></td></tr>
     <tr><td><code>test_freshness.py</code></td><td>Freshness scoring, status classification, staleness indicators</td><td><span class="badge badge-high">Passing</span></td></tr>
+    <tr><td><code>test_rubric_and_matching.py</code></td><td>Rubric rules, critical-element cap, paraphrase and plural matching, scope detection, report transparency, uncatalogued-lead search helper</td><td><span class="badge badge-high">Passing</span></td></tr>
     <tr><td><code>test_recommendations.py</code></td><td>Recommendation generation, priority ordering, executive summary</td><td><span class="badge badge-high">Passing</span></td></tr>
+    <tr><td><code>test_security.py</code></td><td>Live adapter request allowlist; Data.gov base URL validation</td><td><span class="badge badge-high">Passing</span></td></tr>
   </table>
-  <p><strong>Total: 85 tests passing  •  0 failures  •  68% code coverage</strong></p>
+  <p><strong>Total: 280 tests passing  •  0 failures  •  74% code coverage</strong></p>
 
   
   <h2>11. Key Design Principles</h2>
   <ul>
     <li><strong>No LLM dependency in the engine</strong> — all coverage scoring, intent matching, freshness calculation, and recommendation generation is deterministic pattern matching. Same question always returns the same result.</li>
+    <li><strong>Grounded in official records</strong> — dataset names, links, dates and frequencies come from SSA's Data.gov records, and every "no public data" claim cites the searches behind it. Nothing checkable is hand-typed.</li>
+    <li><strong>Measured, not asserted</strong> — reviewed benchmark questions run as tests (19/19), every rating carries a written reason in the report, and each report states its basis (metadata, not dataset contents).</li>
     <li><strong>Gap-linked recommendations</strong> — every recommendation is linked to the specific information element gap it closes, categorized, prioritized, and justified.</li>
     <li><strong>Auditability</strong> — the engine exposes its reasoning: intent category, matched elements, coverage quality per element, weighted score, and staleness indicators are all returned in the tool response.</li>
     <li><strong>Separation of concerns</strong> — the LLM agent copies the pre-formatted report verbatim; all intelligence lives in the MCP server, not in the agent prompt.</li>

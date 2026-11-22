@@ -7,6 +7,8 @@ data transparency, based on a question, topic, or identified coverage gaps.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastmcp import FastMCP
 
 from ..models import RecommendTransparencyInput
@@ -35,7 +37,7 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
         context: str,
         focus_area: str | None = None,
         max_recommendations: int = 5,
-    ) -> dict:  # type: ignore[return]
+    ) -> dict[str, Any]:
         """Generate prioritized transparency improvement recommendations."""
         try:
             inp = RecommendTransparencyInput(

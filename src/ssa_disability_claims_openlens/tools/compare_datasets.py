@@ -7,6 +7,8 @@ dimensions, missing join relationships, and integration opportunities.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastmcp import FastMCP
 
 from ..models import (
@@ -22,44 +24,64 @@ from ..utils import get_logger
 logger = get_logger(__name__)
 
 # ── Shared dimension knowledge base ───────────────────────────────────────────
-# Maps dimension name → set of dataset IDs that contain it.
+# Maps dimension name → dataset IDs that contain it. Each membership must be
+# supported by the dataset's Data.gov record (title or description).
 
 _SHARED_DIMS: dict[str, list[str]] = {
     "state": [
         "ssa-oasdi-beneficiaries-by-state",
-        "ssa-odar-pending-cases",
-        "ssa-disability-research-statistics",
         "ssa-ssi-recipients-by-state",
-        "ssa-field-office-locator",
+        "ssa-disability-claim-data",
+        "ssa-state-agency-workload-data",
+    ],
+    "county": [
+        "ssa-oasdi-beneficiaries-by-state",
+        "ssa-ssi-recipients-by-state",
     ],
     "year / time period": [
         "ssa-oasdi-beneficiaries-by-state",
-        "ssa-disability-applications-decisions",
-        "ssa-disability-research-statistics",
         "ssa-ssi-recipients-by-state",
-        "data-gov-ssa-performance",
-        "ssa-red-book",
+        "ssa-di-annual-statistical-report",
+        "ssa-disability-claim-data",
+        "ssa-state-agency-workload-data",
+        "ssa-field-office-visitors",
     ],
     "program type (SSDI/SSI)": [
-        "ssa-disability-applications-decisions",
-        "ssa-disability-research-statistics",
+        "ssa-state-agency-workload-data",
         "ssa-ssi-recipients-by-state",
         "ssa-oasdi-beneficiaries-by-state",
-        "ssa-red-book",
+        "ssa-di-annual-statistical-report",
     ],
     "beneficiary / recipient counts": [
         "ssa-oasdi-beneficiaries-by-state",
         "ssa-ssi-recipients-by-state",
-        "ssa-disability-research-statistics",
+        "ssa-di-annual-statistical-report",
     ],
-    "average monthly benefit amount": [
-        "ssa-oasdi-beneficiaries-by-state",
-        "ssa-disability-research-statistics",
-        "ssa-ssi-recipients-by-state",
+    "claim receipts and decisions": [
+        "ssa-disability-claim-data",
+        "ssa-state-agency-workload-data",
+        "ssa-hearing-office-workload",
     ],
-    "age group": [
-        "ssa-disability-applications-decisions",
-        "ssa-disability-research-statistics",
+    "allowance / favorable determination counts": [
+        "ssa-disability-claim-data",
+        "ssa-state-agency-workload-data",
+        "ssa-alj-disposition-data",
+    ],
+    "hearing office": [
+        "ssa-hearing-office-workload",
+        "ssa-hearing-wait-time",
+        "ssa-alj-disposition-data",
+    ],
+    "average processing time": [
+        "ssa-initial-disability-processing-time",
+        "ssa-reconsideration-processing-time",
+        "ssa-hearing-office-workload",
+        "ssa-hearing-wait-time",
+    ],
+    "field office": [
+        "ssa-field-office-locator",
+        "ssa-field-office-visitor-counts-2016",
+        "ssa-field-office-employee-counts-2016",
     ],
 }
 
@@ -67,21 +89,21 @@ _SHARED_DIMS: dict[str, list[str]] = {
 
 _MISSING_RELS: list[dict[str, object]] = [
     {
-        "datasets": {"ssa-odar-pending-cases", "ssa-disability-applications-decisions"},
-        "description": "Cannot link initial claim volume to hearing backlog by state",
-        "missing_field": "state (in applications/decisions dataset)",
-        "impact": "Prevents analysis of whether high-application states also face hearing backlogs",
+        "datasets": {"ssa-hearing-office-workload", "ssa-state-agency-workload-data"},
+        "description": "Cannot follow claims from state agency decisions to hearing offices",
+        "missing_field": "mapping of hearing offices to the states they serve",
+        "impact": "Prevents analysis of whether states with low initial allowance rates also face hearing backlogs",
     },
     {
-        "datasets": {"ssa-field-office-locator", "ssa-odar-pending-cases"},
+        "datasets": {"ssa-field-office-locator", "ssa-hearing-office-workload"},
         "description": "Cannot map field office proximity to hearing wait times",
-        "missing_field": "claimant ZIP code or county (in ODAR dataset)",
+        "missing_field": "claimant ZIP code or county (in hearing office data)",
         "impact": "Cannot determine if rural claimants face longer hearing waits than urban claimants",
     },
     {
-        "datasets": {"ssa-disability-research-statistics", "ssa-disability-applications-decisions"},
-        "description": "Cannot cross-tabulate beneficiary demographics with allowance rates",
-        "missing_field": "race/ethnicity (in both datasets)",
+        "datasets": {"ssa-disability-claim-data", "ssa-di-annual-statistical-report"},
+        "description": "Cannot cross-tabulate demographics with allowance rates",
+        "missing_field": "race/ethnicity (not listed in either source record)",
         "impact": "Prevents equity analysis of adjudication outcomes by demographic group",
     },
     {
@@ -89,6 +111,12 @@ _MISSING_RELS: list[dict[str, object]] = [
         "description": "Cannot identify individuals receiving both SSI and SSDI (concurrent beneficiaries)",
         "missing_field": "individual claimant identifier (privacy-protected)",
         "impact": "Cannot measure program overlap or concurrent beneficiary burden",
+    },
+    {
+        "datasets": {"ssa-field-office-locator", "ssa-field-office-visitors"},
+        "description": "Cannot attribute visitor volume to individual field offices",
+        "missing_field": "field office identifier (visitor data is not described per office)",
+        "impact": "Cannot rank offices by in-person demand",
     },
 ]
 
@@ -99,8 +127,8 @@ _INTEGRATION_OPPS: list[dict[str, object]] = [
         "datasets": {"ssa-oasdi-beneficiaries-by-state", "ssa-ssi-recipients-by-state"},
         "title": "Combined State-Level Disability Program Dashboard",
         "description": (
-            "Both datasets share state and time dimensions. Joining them yields a "
-            "comprehensive state-level view of all SSA disability program participants."
+            "Both datasets share state, county and year dimensions. Joining them yields a "
+            "state- and county-level view of SSDI beneficiaries and SSI recipients."
         ),
         "expected_benefit": "Single source for total state disability program enrollment and payments",
     },
@@ -108,28 +136,55 @@ _INTEGRATION_OPPS: list[dict[str, object]] = [
         "datasets": {"ssa-field-office-locator", "ssa-oasdi-beneficiaries-by-state"},
         "title": "Geographic Access Analysis",
         "description": (
-            "Field office locations can be spatially joined to beneficiary counts "
+            "Field office locations can be geocoded and joined to county beneficiary counts "
             "to calculate office-to-beneficiary ratios by county."
         ),
         "expected_benefit": "Identifies counties with high beneficiary density but low office coverage",
     },
     {
-        "datasets": {"ssa-disability-applications-decisions", "data-gov-ssa-performance"},
-        "title": "Application Volume vs. Performance Trend Analysis",
+        "datasets": {"ssa-disability-claim-data", "ssa-state-agency-workload-data"},
+        "title": "Annual and Monthly State Allowance Trends",
         "description": (
-            "Joining application volumes with performance metrics reveals whether "
-            "processing times correlate with application surges."
+            "Both publish state-level receipts, decisions and allowances for cases referred "
+            "to state agencies — one by fiscal year, one by month and case type."
         ),
-        "expected_benefit": "Evidence base for staffing and resource planning decisions",
+        "expected_benefit": "State allowance-rate trends with both long-run and within-year detail",
     },
     {
-        "datasets": {"ssa-odar-pending-cases", "data-gov-ssa-performance"},
-        "title": "Hearing Backlog vs. Performance Target Comparison",
+        "datasets": {"ssa-disability-claim-data", "ssa-oasdi-beneficiaries-by-state"},
+        "title": "Allowance Rates vs. Beneficiary Prevalence by State",
         "description": (
-            "Monthly hearing office data can be compared to annual performance targets "
-            "to assess whether targets reflect actual claimant experience."
+            "Joining state favorable-determination rates with state beneficiary counts shows "
+            "whether high-prevalence states also have high initial allowance rates."
         ),
-        "expected_benefit": "Identifies gaps between reported performance and ground-level outcomes",
+        "expected_benefit": "Context for interpreting state differences in disability program size",
+    },
+    {
+        "datasets": {"ssa-state-agency-workload-data", "ssa-alj-disposition-data"},
+        "title": "Allowance Rates Across Decision Levels",
+        "description": (
+            "State agency allowances (initial, reconsideration) and ALJ allowances by hearing "
+            "office can be set side by side to compare outcomes at each level."
+        ),
+        "expected_benefit": "Shows how allowance rates change from the initial level to hearings",
+    },
+    {
+        "datasets": {"ssa-field-office-visitor-counts-2016", "ssa-field-office-employee-counts-2016"},
+        "title": "FY2016 Visitors per Field Office Employee",
+        "description": (
+            "Both FY2016 releases are per field office, so visitors can be divided by "
+            "employees to give a one-year demand-to-staff ratio."
+        ),
+        "expected_benefit": "A historical baseline for field office workload pressure",
+    },
+    {
+        "datasets": {"ssa-hearing-office-workload", "ssa-hearing-wait-time"},
+        "title": "Hearing Backlog vs. Wait Time",
+        "description": (
+            "Pending, receipts and dispositions per hearing office can be read alongside the "
+            "average time from hearing request to hearing held."
+        ),
+        "expected_benefit": "Shows whether offices with growing backlogs also have longer waits",
     },
 ]
 
@@ -146,7 +201,7 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             "Requires dataset_ids from discover_disability_datasets."
         ),
     )
-    def compare_datasets(dataset_ids: list[str]) -> dict:  # type: ignore[return]
+    def compare_datasets(dataset_ids: list[str]) -> dict[str, Any]:
         """Compare multiple datasets for shared dimensions and integration opportunities."""
         if len(dataset_ids) < 2:
             return {

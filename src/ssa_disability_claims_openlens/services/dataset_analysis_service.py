@@ -10,7 +10,6 @@ This service evaluates individual datasets on two orthogonal dimensions:
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
 
 from ..models import (
     CompletenessAnalysis,
@@ -26,31 +25,31 @@ logger = get_logger(__name__)
 
 
 # ── Completeness scoring knowledge base ───────────────────────────────────────
-# Maps dataset_id → pre-computed coverage axis assessments.
-# This avoids expensive runtime inference for known datasets.
+# Maps dataset_id → coverage axis assessments. Scores are analyst judgements;
+# the facts in "details" and "gaps" must be supported by the dataset's Data.gov
+# record (see data/datagov_snapshot.json). Datasets not listed here fall back
+# to _default_completeness().
 
 _COMPLETENESS_KB: dict[str, dict[str, object]] = {
     "ssa-oasdi-beneficiaries-by-state": {
         "geographic": CoverageAxis(
             axis="Geographic",
             score=85.0,
-            details="Covers all 50 states, DC, and territories; county-level data available",
-            gaps=["Sub-county (ZIP/census tract) data not published",
-                  "Small-population county cells are suppressed"],
+            details="State and county tables",
+            gaps=["Sub-county (ZIP/census tract) data not published"],
         ),
         "temporal": CoverageAxis(
             axis="Temporal",
             score=70.0,
-            details="Annual data from 1990 to 2023; 12–18 month lag from reference year",
+            details="Annual publication; Data.gov record covers 1999–2024",
             gaps=["No monthly or quarterly snapshots",
                   "Within-year trend analysis not possible"],
         ),
         "operational": CoverageAxis(
             axis="Operational",
-            score=60.0,
-            details="Covers OASDI beneficiary counts and average benefits",
-            gaps=["No pending claims or decision data",
-                  "No demographic cross-tabulation at county level",
+            score=55.0,
+            details="Beneficiaries by benefit type and beneficiary category",
+            gaps=["No application, decision or pending-claim data",
                   "Denied applicants excluded"],
         ),
         "missing_dimensions": [
@@ -59,32 +58,148 @@ _COMPLETENESS_KB: dict[str, dict[str, object]] = {
             "Impairment type at sub-national level",
         ],
         "analyst_notes": (
-            "Strong geographic foundation for beneficiary analysis. The main limitation is "
-            "annual frequency and lack of demographic granularity below state level."
+            "Strong geographic foundation for beneficiary analysis. It describes who receives "
+            "benefits, not who applies or how claims are decided."
         ),
     },
-    "ssa-odar-pending-cases": {
+    "ssa-ssi-recipients-by-state": {
         "geographic": CoverageAxis(
             axis="Geographic",
-            score=75.0,
-            details="Covers all ODAR hearing offices; state-level rollup available",
-            gaps=["Hearing office catchment areas do not align with political boundaries",
-                  "No ZIP code or county mapping for claimants"],
+            score=88.0,
+            details="State and county tables",
+            gaps=["No sub-county detail"],
         ),
         "temporal": CoverageAxis(
             axis="Temporal",
-            score=90.0,
-            details="Monthly data from 2007 to present; 1-month publication lag",
-            gaps=["Historical data format changed in 2015 — comparability limited"],
+            score=70.0,
+            details="Annual report; Data.gov record covers December 1998–2024",
+            gaps=["No monthly or quarterly snapshots"],
+        ),
+        "operational": CoverageAxis(
+            axis="Operational",
+            score=55.0,
+            details="Recipients, federal payments and federally administered state supplementation",
+            gaps=["No applicant or denial data",
+                  "No income, housing, or asset data"],
+        ),
+        "missing_dimensions": [
+            "Recipient demographics at county level",
+            "Income and asset information",
+        ],
+        "analyst_notes": (
+            "Good geographic depth for SSI program size and payments. Limited for assessing "
+            "benefit adequacy or recipient circumstances."
+        ),
+    },
+    "ssa-di-annual-statistical-report": {
+        "geographic": CoverageAxis(
+            axis="Geographic",
+            score=40.0,
+            details="Geographic detail is not described in the Data.gov record",
+            gaps=["Check the report's table list for state-level tables"],
+        ),
+        "temporal": CoverageAxis(
+            axis="Temporal",
+            score=75.0,
+            details="Annual report; Data.gov record covers 1960–2025",
+            gaps=["Annual only — cannot track within-year changes"],
+        ),
+        "operational": CoverageAxis(
+            axis="Operational",
+            score=55.0,
+            details="Program and demographic statistics on disability beneficiaries",
+            gaps=["Beneficiaries only — applications and decisions are in other datasets",
+                  "No machine-readable download listed in the Data.gov record"],
+        ),
+        "missing_dimensions": [
+            "Race and ethnicity",
+            "Application and decision outcomes",
+        ],
+        "analyst_notes": (
+            "The main source for the demographic profile of SSDI beneficiaries. Pair it with "
+            "SSA Disability Claim Data for application and allowance analysis."
+        ),
+    },
+    "ssa-disability-claim-data": {
+        "geographic": CoverageAxis(
+            axis="Geographic",
+            score=70.0,
+            details="State level",
+            gaps=["No county or field office detail"],
+        ),
+        "temporal": CoverageAxis(
+            axis="Temporal",
+            score=55.0,
+            details="Fiscal-year data from October 2000; Data.gov metadata last modified 2022-07-07",
+            gaps=["Annual only",
+                  "Recent fiscal years may be missing — the record has not been updated since 2022"],
+        ),
+        "operational": CoverageAxis(
+            axis="Operational",
+            score=65.0,
+            details="Receipts, determinations, eligible population and favorable determination rates for initial claims",
+            gaps=["Initial (state agency) level only — no hearing outcomes"],
+        ),
+        "missing_dimensions": [
+            "Race and ethnicity",
+            "Sub-state geography",
+            "Hearing-level outcomes",
+        ],
+        "analyst_notes": (
+            "Publishes state-level initial allowance (favorable determination) rates — the "
+            "key source for comparing states at the initial level."
+        ),
+    },
+    "ssa-state-agency-workload-data": {
+        "geographic": CoverageAxis(
+            axis="Geographic",
+            score=70.0,
+            details="State level",
+            gaps=["No county or field office detail"],
+        ),
+        "temporal": CoverageAxis(
+            axis="Temporal",
+            score=80.0,
+            details="Monthly data from October 2000",
+            gaps=["Data.gov metadata last modified 2023-08-08 — check the data page for recent months"],
+        ),
+        "operational": CoverageAxis(
+            axis="Operational",
+            score=75.0,
+            details="Receipts, end-of-month pending, decisions and allowances for initial, reconsideration and CDR cases, by SSDI/SSI",
+            gaps=["State agency levels only — no hearing outcomes",
+                  "No processing times"],
+        ),
+        "missing_dimensions": [
+            "Race and ethnicity",
+            "Processing times",
+            "Hearing-level outcomes",
+        ],
+        "analyst_notes": (
+            "The most detailed public view of state agency disability workloads and allowances, "
+            "by month and case type."
+        ),
+    },
+    "ssa-hearing-office-workload": {
+        "geographic": CoverageAxis(
+            axis="Geographic",
+            score=70.0,
+            details="Each OHO hearing office",
+            gaps=["No mapping of hearing offices to claimant ZIP code or county"],
+        ),
+        "temporal": CoverageAxis(
+            axis="Temporal",
+            score=70.0,
+            details="Monthly current report; past months are separate Data.gov records",
+            gaps=["History must be assembled from monthly archive records"],
         ),
         "operational": CoverageAxis(
             axis="Operational",
             score=50.0,
-            details="Covers pending case counts and average processing days",
+            details="Pending, receipts, dispositions and average processing time",
             gaps=["No processing time distribution (median, percentiles)",
-                  "No demographic breakdown of claimants",
-                  "No impairment type or case complexity data",
-                  "Pre-hearing wait time (initial claim to hearing request) not included"],
+                  "No claimant demographics",
+                  "No case complexity data"],
         ),
         "missing_dimensions": [
             "Processing time distribution (not just averages)",
@@ -92,175 +207,40 @@ _COMPLETENESS_KB: dict[str, dict[str, object]] = {
             "Case complexity indicators",
         ],
         "analyst_notes": (
-            "Best available source for hearing backlog monitoring. Operational coverage "
-            "is limited — averages hide the distribution of wait times across claimants."
-        ),
-    },
-    "ssa-disability-applications-decisions": {
-        "geographic": CoverageAxis(
-            axis="Geographic",
-            score=20.0,
-            details="National totals only — no state or local breakdown",
-            gaps=["No state-level application or outcome data",
-                  "Cannot identify geographic disparities in allowance rates"],
-        ),
-        "temporal": CoverageAxis(
-            axis="Temporal",
-            score=65.0,
-            details="Annual data from 1960 to 2023",
-            gaps=["Annual only — cannot track within-year surges",
-                  "12-month publication lag"],
-        ),
-        "operational": CoverageAxis(
-            axis="Operational",
-            score=75.0,
-            details="Covers applications, awards, denials, and allowance rates by program and impairment",
-            gaps=["Reconsideration and hearing outcomes in separate publications",
-                  "Race/ethnicity not published",
-                  "No claim complexity data"],
-        ),
-        "missing_dimensions": [
-            "Geographic disaggregation",
-            "Race and ethnicity",
-            "Multi-level outcomes in single table",
-        ],
-        "analyst_notes": (
-            "Comprehensive national view of disability program access. The absence of "
-            "geographic and demographic disaggregation is a significant limitation for "
-            "equity analysis."
+            "Best available source for hearing backlog monitoring by office. Averages hide the "
+            "distribution of wait times across claimants."
         ),
     },
     "ssa-field-office-locator": {
         "geographic": CoverageAxis(
             axis="Geographic",
-            score=95.0,
-            details="Complete directory of all SSA field offices with geocoordinates",
+            score=90.0,
+            details="Directory of SSA field offices with locations",
             gaps=["Formal service area boundaries not defined"],
         ),
         "temporal": CoverageAxis(
             axis="Temporal",
             score=40.0,
-            details="Current snapshot only — no historical archive of office openings/closures",
-            gaps=["Cannot track office closures over time",
-                  "No longitudinal access analysis possible"],
+            details="Current snapshot, updated quarterly",
+            gaps=["Cannot track office closures over time"],
         ),
         "operational": CoverageAxis(
             axis="Operational",
             score=30.0,
-            details="Basic directory data: address, phone, coordinates",
+            details="Locations, telephone numbers and hours of operation",
             gaps=["No appointment wait time data",
                   "No staffing or capacity information",
-                  "No visit volume or service type data",
-                  "No ADA or language service information"],
+                  "No visit volume per office"],
         ),
         "missing_dimensions": [
             "Appointment wait times",
             "Staffing levels",
-            "Visit volumes by service type",
+            "Visit volumes per office",
             "ADA accessibility status",
-            "Languages served",
         ],
         "analyst_notes": (
             "Useful for proximity analysis but lacks the operational data needed to assess "
-            "access quality. The absence of wait time and capacity data is the critical gap."
-        ),
-    },
-    "ssa-disability-research-statistics": {
-        "geographic": CoverageAxis(
-            axis="Geographic",
-            score=65.0,
-            details="State-level data available for key metrics",
-            gaps=["No county or sub-state breakdown",
-                  "Geographic detail limited for demographic cross-tabs"],
-        ),
-        "temporal": CoverageAxis(
-            axis="Temporal",
-            score=70.0,
-            details="Annual data from 1970 to 2023",
-            gaps=["Annual publication — no within-year analysis",
-                  "12-18 month publication lag"],
-        ),
-        "operational": CoverageAxis(
-            axis="Operational",
-            score=65.0,
-            details="Covers age, sex, benefit amounts, and covered earnings for SSDI beneficiaries",
-            gaps=["No race or ethnicity data",
-                  "Sex is binary — no non-binary category",
-                  "No impairment type cross-tabulation",
-                  "No income or asset data"],
-        ),
-        "missing_dimensions": [
-            "Race and ethnicity",
-            "Non-binary gender categories",
-            "Impairment type cross-tabulation",
-        ],
-        "analyst_notes": (
-            "Good demographic foundation for SSDI research. The absence of race/ethnicity "
-            "data is the most significant gap for equity-focused analysis."
-        ),
-    },
-    "ssa-ssi-recipients-by-state": {
-        "geographic": CoverageAxis(
-            axis="Geographic",
-            score=88.0,
-            details="State and county-level data for all U.S. jurisdictions",
-            gaps=["No sub-county detail",
-                  "Small-population cell suppression"],
-        ),
-        "temporal": CoverageAxis(
-            axis="Temporal",
-            score=92.0,
-            details="Monthly data from 2008 to present; 2-3 month publication lag",
-            gaps=["Historical data before 2008 in separate publication"],
-        ),
-        "operational": CoverageAxis(
-            axis="Operational",
-            score=50.0,
-            details="Covers recipient counts and total payment amounts by eligibility category",
-            gaps=["No demographic breakdown below state level",
-                  "Payment amounts exclude state supplements",
-                  "No income, housing, or asset data"],
-        ),
-        "missing_dimensions": [
-            "Recipient demographics at county level",
-            "State supplement amounts",
-            "Income and asset information",
-        ],
-        "analyst_notes": (
-            "Excellent temporal frequency for SSI program monitoring. Limited operational "
-            "depth — cannot assess benefit adequacy or recipient characteristics at scale."
-        ),
-    },
-    "data-gov-ssa-performance": {
-        "geographic": CoverageAxis(
-            axis="Geographic",
-            score=10.0,
-            details="National performance metrics only",
-            gaps=["No regional or office-level performance breakdown"],
-        ),
-        "temporal": CoverageAxis(
-            axis="Temporal",
-            score=75.0,
-            details="Annual fiscal year data from 2003 to present",
-            gaps=["Annual only — cannot identify within-year performance shifts",
-                  "Metric definitions change between fiscal years"],
-        ),
-        "operational": CoverageAxis(
-            axis="Operational",
-            score=60.0,
-            details="Covers SSA-defined performance metrics including processing times and accuracy",
-            gaps=["Metrics are self-defined and self-reported",
-                  "No demographic breakdown of performance outcomes",
-                  "Coverage of metrics varies year-to-year"],
-        ),
-        "missing_dimensions": [
-            "Regional or office-level performance breakdown",
-            "Demographic disaggregation of performance outcomes",
-            "Independent verification of reported metrics",
-        ],
-        "analyst_notes": (
-            "Useful for tracking SSA's own performance commitments. Limited for "
-            "independent evaluation due to national aggregation and self-reporting."
+            "access quality."
         ),
     },
 }
@@ -411,8 +391,8 @@ class DatasetAnalysisService:
         score: float,
         status: FreshnessStatus,
         freq: UpdateFrequency,
-        last_updated: Optional[date],
-        elapsed: Optional[int],
+        last_updated: date | None,
+        elapsed: int | None,
     ) -> str:
         if status == FreshnessStatus.UNKNOWN or elapsed is None or last_updated is None:
             return (

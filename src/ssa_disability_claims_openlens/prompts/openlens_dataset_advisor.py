@@ -7,6 +7,8 @@ using the OpenLens toolkit to advise on dataset selection and analysis.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastmcp import FastMCP
 
 
@@ -20,7 +22,7 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             "a multi-dataset analysis workflow."
         ),
     )
-    def openlens_dataset_advisor(analysis_question: str) -> list[dict]:
+    def openlens_dataset_advisor(analysis_question: str) -> list[dict[str, Any]]:
         """Generate a dataset advisor prompt for a given analysis question."""
         return [
             {

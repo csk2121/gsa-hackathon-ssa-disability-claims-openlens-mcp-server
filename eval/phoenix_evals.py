@@ -25,6 +25,10 @@ from typing import Any
 # Allow running from project root
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# The report prints check and cross marks; make them printable on Windows consoles (cp1252).
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 from src.ssa_disability_claims_openlens.models import CoverageRating
 from src.ssa_disability_claims_openlens.services.answer_coverage_service import (
     AnswerCoverageEngine,
@@ -52,7 +56,7 @@ BENCHMARK_CASES: list[BenchmarkCase] = [
         expected_max_score=100.0,
         expected_rating=CoverageRating.PARTIAL,  # Data exists but limited depth
         must_contain_gaps=[],
-        must_contain_available=["SSDI"],
+        must_contain_available=["OASDI"],  # official title: "OASDI Beneficiaries by State and County (series)"
         description="Core SSDI beneficiary question — data partially available",
     ),
     BenchmarkCase(
@@ -80,7 +84,7 @@ BENCHMARK_CASES: list[BenchmarkCase] = [
         expected_rating=CoverageRating.PARTIAL,
         must_contain_gaps=[],
         must_contain_available=["Hearing"],
-        description="Hearing backlog question — ODAR data partially covers this",
+        description="Hearing backlog question — OHO hearing office data partially covers this",
     ),
     BenchmarkCase(
         question="How many SSI recipients are there in California by county?",

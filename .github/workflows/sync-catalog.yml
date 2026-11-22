@@ -1,0 +1,58 @@
+name: Sync dataset catalog with Data.gov
+
+# Re-fetches SSA's Data.gov metadata records for every catalog entry and opens a
+# pull request when anything changed (new modified dates, moved URLs, retired
+# datasets). A retired or renamed record fails the job so it gets attention.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sync snapshot from Data.gov
+        run: python scripts/sync_catalog.py
+
+      - name: Run grounding tests against the new snapshot
+        run: |
+          pip install -e ".[dev]"
+          pytest tests/test_catalog_grounding.py --no-cov -q
+
+      - name: Open pull request if the snapshot changed
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/sync-datagov-catalog
+          commit-message: "chore: sync dataset catalog with Data.gov records"
+          title: "Sync dataset catalog with Data.gov records"
+          body: |
+            Automated weekly refresh of `src/ssa_disability_claims_openlens/data/datagov_snapshot.json`
+            from SSA's Data.gov metadata records (`scripts/sync_catalog.py`).
+
+            Review the diff for changed URLs, modified dates or update frequencies, and check
+            that the curated notes in `dataset_catalog_service.py` still agree with the records.
+          add-paths: src/ssa_disability_claims_openlens/data/datagov_snapshot.json
+
+  gap-claims:
+    # Re-runs the searches behind every "no public data" claim. Fails when SSA has
+    # published something new that matches — review it in data/gap_evidence.json.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check gap claims against Data.gov
+        run: python scripts/check_gap_claims.py

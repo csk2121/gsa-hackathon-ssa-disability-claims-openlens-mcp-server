@@ -7,6 +7,8 @@ Returns a pre-formatted assessment report as the primary output field.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastmcp import FastMCP
 
 from ..models import EvaluateAnswerCoverageInput
@@ -36,7 +38,7 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
     )
     def evaluate_answer_coverage(
         question: str,
-    ) -> dict:  # type: ignore[return]
+    ) -> dict[str, Any]:
         """
         Assess how well SSA public datasets support answering a question.
         Present the 'report' field verbatim — do not paraphrase it.
@@ -47,6 +49,7 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
                 include_recommendations=True,
             )
             engine = get_answer_coverage_engine()
+            # The rating uses only the grounded catalog (deterministic, offline).
             assessment = engine.evaluate(inp.question)
 
             logger.info(

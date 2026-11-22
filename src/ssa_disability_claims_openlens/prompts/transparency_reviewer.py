@@ -7,6 +7,8 @@ a structured improvement plan.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastmcp import FastMCP
 
 
@@ -20,7 +22,7 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             "improvement plan."
         ),
     )
-    def transparency_reviewer(program_area: str) -> list[dict]:
+    def transparency_reviewer(program_area: str) -> list[dict[str, Any]]:
         """Generate a transparency review prompt for a specific SSA program area."""
         return [
             {

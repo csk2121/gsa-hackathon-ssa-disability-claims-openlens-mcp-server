@@ -29,7 +29,7 @@ class Settings(BaseModel):
     # ── Data source adapters ───────────────────────────────────────────────────
     ssa_open_data_base_url: str = Field(default="https://www.ssa.gov/data/")
     data_gov_api_base_url: str = Field(
-        default="https://catalog.data.gov/api/3/action"
+        default="https://catalog.data.gov/api/v1"
     )
     data_gov_api_key: str = Field(default="")
 
@@ -37,7 +37,7 @@ class Settings(BaseModel):
     @classmethod
     def validate_data_gov_url(cls, v: str) -> str:
         """
-        Reject any base URL that does not point to the official Data.gov CKAN API.
+        Reject any base URL that does not point to the official Data.gov catalog API.
 
         This eliminates the SSRF path where a compromised environment variable
         redirects outbound requests to an internal endpoint (e.g. cloud metadata
@@ -66,7 +66,7 @@ class Settings(BaseModel):
     coverage_limited_threshold: float = Field(default=15.0)
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         """Construct Settings from environment variables."""
         return cls(
             server_name=os.getenv(
@@ -78,7 +78,7 @@ class Settings(BaseModel):
                 "SSA_OPEN_DATA_BASE_URL", "https://www.ssa.gov/data/"
             ),
             data_gov_api_base_url=os.getenv(
-                "DATA_GOV_API_BASE_URL", "https://catalog.data.gov/api/3/action"
+                "DATA_GOV_API_BASE_URL", "https://catalog.data.gov/api/v1"
             ),
             data_gov_api_key=os.getenv("DATA_GOV_API_KEY", ""),
             catalog_cache_ttl_seconds=int(

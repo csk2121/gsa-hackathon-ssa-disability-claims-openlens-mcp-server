@@ -7,6 +7,8 @@ dimensions of the disability domain. Produces a scored completeness analysis.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastmcp import FastMCP
 
 from ..models import AnalyzeCompletenessInput
@@ -34,7 +36,7 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
     def analyze_dataset_completeness(
         dataset_id: str,
         focus_dimensions: list[str] | None = None,
-    ) -> dict:  # type: ignore[return]
+    ) -> dict[str, Any]:
         """Evaluate dataset coverage across geographic, temporal, and operational axes."""
         try:
             inp = AnalyzeCompletenessInput(

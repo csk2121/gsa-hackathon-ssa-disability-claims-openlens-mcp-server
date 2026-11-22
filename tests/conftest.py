@@ -23,15 +23,15 @@ except ImportError:
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
     sys.modules["fastmcp"] = mod
 
-from src.ssa_disability_claims_openlens.services.dataset_catalog_service import (
-    DatasetCatalogService,
-    StaticCatalogAdapter,
-)
 from src.ssa_disability_claims_openlens.services.answer_coverage_service import (
     AnswerCoverageEngine,
 )
 from src.ssa_disability_claims_openlens.services.dataset_analysis_service import (
     DatasetAnalysisService,
+)
+from src.ssa_disability_claims_openlens.services.dataset_catalog_service import (
+    DatasetCatalogService,
+    StaticCatalogAdapter,
 )
 from src.ssa_disability_claims_openlens.services.recommendation_service import (
     RecommendationService,

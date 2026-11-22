@@ -10,15 +10,6 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
-from .tools import (
-    analyze_dataset_completeness,
-    assess_dataset_freshness,
-    compare_datasets,
-    discover_disability_datasets,
-    evaluate_answer_coverage,
-    explain_dataset,
-    recommend_transparency_improvements,
-)
 from .prompts import (
     answer_coverage_evaluator,
     openlens_dataset_advisor,
@@ -29,6 +20,15 @@ from .resources import (
     disability_datasets,
     field_office_datasets,
     transparency_recommendations,
+)
+from .tools import (
+    analyze_dataset_completeness,
+    assess_dataset_freshness,
+    compare_datasets,
+    discover_disability_datasets,
+    evaluate_answer_coverage,
+    explain_dataset,
+    recommend_transparency_improvements,
 )
 
 

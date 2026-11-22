@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
-
 _FRAMEWORK_DOC = """
 # Answer Coverage Framework
 ## SSA Disability Claims OpenLens

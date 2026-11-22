@@ -22,7 +22,7 @@ benchmark_questions:
     question: "How long are people waiting for initial disability decisions?"
     expected_coverage: Partial
     key_datasets:
-      - data-gov-ssa-performance
+      - ssa-hearing-wait-time
     key_gaps:
       - State-level breakdown
       - Distribution (median, percentiles)
@@ -33,7 +33,7 @@ benchmark_questions:
     question: "What is the average hearing wait time by hearing office?"
     expected_coverage: Partial
     key_datasets:
-      - ssa-odar-pending-cases
+      - ssa-hearing-office-workload
     key_gaps:
       - Distribution data
       - Demographic breakdown
@@ -44,7 +44,7 @@ benchmark_questions:
     question: "How has disability claim processing time changed over the last 10 years?"
     expected_coverage: Partial
     key_datasets:
-      - data-gov-ssa-performance
+      - ssa-hearing-wait-time
     key_gaps:
       - Monthly granularity
       - State-level trends
@@ -53,10 +53,12 @@ benchmark_questions:
   - id: PT-004
     category: processing_times
     question: "How long does the entire disability process take from application to final decision?"
-    expected_coverage: Limited
+    # Reviewed 2026-11-22: average times are published for each level (US-GOV-SSA-1409,
+    # -1768, -304) but cannot be linked across levels, so the total is only approximate.
+    expected_coverage: Partial
     key_datasets:
-      - ssa-odar-pending-cases
-      - data-gov-ssa-performance
+      - ssa-hearing-office-workload
+      - ssa-hearing-wait-time
     key_gaps:
       - End-to-end integrated timeline
       - Multi-level process data in single dataset
@@ -67,17 +69,22 @@ benchmark_questions:
   - id: GE-001
     category: geographic_equity
     question: "Do disability allowance rates vary significantly by state?"
-    expected_coverage: Limited
+    # State agency-level allowance rates are published (Data.gov US-GOV-SSA-307, -308).
+    expected_coverage: Partial
     key_datasets:
-      - ssa-disability-applications-decisions
+      - ssa-disability-claim-data
+      - ssa-state-agency-workload-data
     key_gaps:
-      - State-level applications and decisions data
+      - Hearing-level allowance rates by state
+      - Sub-state (county) detail
     persona: Policy Researcher
 
   - id: GE-002
     category: geographic_equity
     question: "Which counties have the highest concentration of disability beneficiaries?"
-    expected_coverage: Partial
+    # Reviewed 2026-11-22: county beneficiary counts are published (US-GOV-SSA-3378, -3414).
+    # Per-capita concentration also needs Census population, which is outside SSA data.
+    expected_coverage: High
     key_datasets:
       - ssa-oasdi-beneficiaries-by-state
       - ssa-ssi-recipients-by-state
@@ -114,8 +121,7 @@ benchmark_questions:
     question: "How do disability award rates differ by age group?"
     expected_coverage: Partial
     key_datasets:
-      - ssa-disability-applications-decisions
-      - ssa-disability-research-statistics
+      - ssa-di-annual-statistical-report
     key_gaps:
       - Allowance rates cross-tabulated with age
     persona: Gerontology Researcher
@@ -125,7 +131,7 @@ benchmark_questions:
     question: "Do men and women receive different average disability benefit amounts?"
     expected_coverage: Partial
     key_datasets:
-      - ssa-disability-research-statistics
+      - ssa-di-annual-statistical-report
     key_gaps:
       - Gender benefit difference statistical significance
       - Non-binary gender categories
@@ -154,15 +160,34 @@ benchmark_questions:
       - Workload/visit volume data
     persona: SSA Operations Manager
 
+  - id: FA-003
+    category: field_office_access
+    question: "Which field offices have the longest decision wait times?"
+    # Reviewed 2026-11-22: no dataset reports decision times per field office or DDS.
+    # Initial-claim times are national (US-GOV-SSA-1409), Field Office Claims Pending is
+    # national only (US-GOV-SSA-435), and per-office times exist only for hearing offices
+    # (US-GOV-SSA-303), which are not mapped to field offices. Field offices do not make
+    # the medical decision (DDS and hearing offices do).
+    expected_coverage: Limited
+    key_datasets:
+      - ssa-hearing-office-workload
+      - ssa-initial-disability-processing-time
+    key_gaps:
+      - Decision times by field office or DDS
+      - Mapping of field offices to deciding offices
+    persona: Disability Advocate
+
   # ── Program outcomes ──────────────────────────────────────────────────────────
 
   - id: PO-001
     category: program_outcomes
     question: "What percentage of disability applicants are ultimately approved after all appeals?"
-    expected_coverage: Limited
+    # Reviewed 2026-11-22: allowances are published at each level (US-GOV-SSA-307, -299)
+    # but not linked for the same claims, so the final rate is only approximate.
+    expected_coverage: Partial
     key_datasets:
-      - ssa-disability-applications-decisions
-      - ssa-odar-pending-cases
+      - ssa-disability-claim-data
+      - ssa-hearing-office-workload
     key_gaps:
       - Multi-level outcome integration
       - Final allowance rate after appeals
@@ -172,8 +197,8 @@ benchmark_questions:
     category: program_outcomes
     question: "What are the most common reasons for disability claim denials?"
     expected_coverage: Limited
-    key_datasets:
-      - ssa-disability-applications-decisions
+    # Reviewed 2026-11-22: no SSA dataset reports denial reasons (see data/gap_evidence.json).
+    key_datasets: []
     key_gaps:
       - Denial reason codes
       - Medical vs. non-medical denial breakdown
@@ -209,7 +234,7 @@ benchmark_questions:
     expected_coverage: Partial
     key_datasets:
       - ssa-oasdi-beneficiaries-by-state
-      - ssa-disability-research-statistics
+      - ssa-di-annual-statistical-report
     key_gaps:
       - Cost of living adjustment
     persona: Social Insurance Researcher

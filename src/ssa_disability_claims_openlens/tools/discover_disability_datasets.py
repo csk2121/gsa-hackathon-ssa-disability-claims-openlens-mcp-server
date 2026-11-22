@@ -7,6 +7,8 @@ keyword search and filtering by source or subject-matter tags.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastmcp import FastMCP
 
 from ..models import (
@@ -36,7 +38,7 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
         query: str | None = None,
         source_filter: str | None = None,
         tags: list[str] | None = None,
-    ) -> dict:  # type: ignore[return]
+    ) -> dict[str, Any]:
         """Find SSA disability-related public datasets."""
         try:
             inp = DiscoverDatasetsInput(
@@ -54,9 +56,13 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
                 datasets=datasets,
                 total_found=len(datasets),
                 query_applied=inp.query,
-                source_note=(
-                    "Results include the curated SSA OpenLens static catalog and "
-                    "may include live Data.gov results when network is available."
+                source_note=" ".join(
+                    [
+                        "Every dataset's name, URL, dates and update frequency come from its "
+                        "official metadata record (see each dataset's 'provenance'). "
+                        "Live Data.gov search results are included when the network is available."
+                    ]
+                    + catalog.source_notes()
                 ),
             )
             logger.info(f"discover_disability_datasets: returned {len(datasets)} datasets")

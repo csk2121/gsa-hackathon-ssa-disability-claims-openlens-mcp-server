@@ -7,6 +7,8 @@ Returns a freshness score, qualitative status, and staleness indicators.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastmcp import FastMCP
 
 from ..models import AssessFreshnessInput
@@ -33,7 +35,7 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             "Use this tool before relying on a dataset for time-sensitive analysis."
         ),
     )
-    def assess_dataset_freshness(dataset_id: str) -> dict:  # type: ignore[return]
+    def assess_dataset_freshness(dataset_id: str) -> dict[str, Any]:
         """
         Evaluate dataset update currency and freshness.
         Present the 'report' field verbatim — do not paraphrase it.

@@ -61,12 +61,14 @@ Assessment Confidence
 
 Available Data
 --------------
-| Sl.# | Data | Web Link |
-|------|------|----------|
-| 1 | SSA Field Office Locations | https://www.ssa.gov/locator/ |
-| 2 | OASDI Beneficiaries by State and County | https://www.ssa.gov/policy/docs/statcomps/oasdi_sc/ |
-| 3 | ODAR Pending Cases by Hearing Office | https://www.ssa.gov/appeals/DataSets.html |
-| 4 | SSI Recipients by State and County | https://www.ssa.gov/policy/docs/statcomps/ssi_sc/ |
+| Sl.# | Data | Web Link | Source Record |
+|------|------|----------|---------------|
+| 1 | Field Office Contact Information | https://www.ssa.gov/data/FO-RS-Address-Open-Close-Time-App-Devs.html | Data.gov record US-GOV-SSA-1733 |
+| 2 | OASDI Beneficiaries by State and County (series) | https://www.ssa.gov/policy/docs/statcomps/oasdi_sc/index.html | Data.gov record US-GOV-SSA-3378 |
+| 3 | Hearing Office Workload Data - Current Report | https://www.ssa.gov/appeals/DataSets/02_HO_Workload_Data.html | Data.gov record US-GOV-SSA-303 |
+| 4 | SSI Recipients by State and County (series) | https://www.ssa.gov/policy/docs/statcomps/ssi_sc/index.html | Data.gov record US-GOV-SSA-3414 |
+
+Every link comes from the dataset's official Data.gov metadata record — see [docs/datasets.md](docs/datasets.md#how-the-catalog-is-grounded).
 
 Missing Information
 -------------------
@@ -202,9 +204,9 @@ Find SSA disability-related public datasets. Supports keyword search, source fil
 Explain a dataset's purpose, major fields, use cases, and limitations in plain English.
 
 **Example prompts:**
-- *"Explain the ODAR Pending Cases dataset"*
+- *"Explain the Hearing Office Workload dataset"*
 - *"What are the limitations of the SSI Recipients by State dataset?"*
-- *"What fields are in ssa-disability-applications-decisions?"*
+- *"What fields are in ssa-disability-claim-data?"*
 
 ---
 
@@ -213,7 +215,7 @@ Compare two or more datasets to identify shared dimensions, missing join relatio
 
 **Example prompts:**
 - *"Compare ssa-oasdi-beneficiaries-by-state and ssa-ssi-recipients-by-state"*
-- *"Can I join the ODAR and performance datasets?"*
+- *"Can I join the hearing office workload and hearing wait time datasets?"*
 
 ---
 
@@ -222,7 +224,7 @@ Evaluate a dataset's geographic, temporal, and operational coverage. Returns a s
 
 **Example prompts:**
 - *"How complete is the SSA disability applications dataset?"*
-- *"What geographic coverage gaps exist in the ODAR dataset?"*
+- *"What geographic coverage gaps exist in the hearing office workload dataset?"*
 
 ---
 
@@ -240,8 +242,8 @@ Evaluate how current a dataset is relative to its stated update frequency. Retur
 **Freshness statuses:** Current | Aging | Stale | Unknown
 
 **Example prompts:**
-- *"Is the ODAR Pending Cases dataset up to date?"*
-- *"Assess the freshness of the SSA Disability Research Statistics dataset"*
+- *"Is the SSA Disability Claim Data dataset up to date?"*
+- *"Assess the freshness of the SSA State Agency Workload Data dataset"*
 - *"How stale is the disability applications dataset?"*
 
 ---
@@ -427,16 +429,31 @@ Measures how certain the engine is about the **quality of its own analysis** —
 
 ## Datasets Covered
 
-| Dataset | Source | Frequency |
-|---------|--------|-----------|
-| OASDI Beneficiaries by State and County | SSA Open Data | Annual |
-| ODAR Pending Cases by Hearing Office | SSA Open Data | Monthly |
-| SSI/SSDI Applications and Decisions | SSA Open Data | Annual |
-| SSA Field Office Locations | SSA Open Data | Quarterly |
-| SSA Disability Research Statistics | SSA Open Data | Annual |
-| SSI Recipients by State and County | SSA Open Data | Monthly |
-| SSA Red Book — Work Incentives | SSA Open Data | Annual |
-| SSA Annual Performance Report | Data.gov | Annual |
+| Dataset | Data.gov record | Frequency |
+|---------|-----------------|-----------|
+| OASDI Beneficiaries by State and County (series) | US-GOV-SSA-3378 | Annual |
+| SSI Recipients by State and County (series) | US-GOV-SSA-3414 | Annual |
+| Annual Statistical Report on the SSDI Program | US-GOV-SSA-1667 | Annual |
+| SSA Disability Claim Data (state allowance rates) | US-GOV-SSA-308 | Annual |
+| SSA State Agency Workload Data | US-GOV-SSA-307 | Monthly |
+| Hearing Office Workload Data | US-GOV-SSA-303 | Monthly |
+| Average Wait Time Until Hearing Held | US-GOV-SSA-304 | Monthly |
+| Field Office Contact Information | US-GOV-SSA-1733 | Quarterly |
+| Field Office Visitors (Average Daily) | US-GOV-SSA-434 | Annual |
+| Initial disability claim average processing time | US-GOV-SSA-1409 | Monthly |
+| Disability reconsideration average processing time | US-GOV-SSA-1768 | Annual |
+| ALJ Disposition Data (hearing-level allowances) | US-GOV-SSA-299 | Monthly |
+| DDS Accuracy | US-GOV-SSA-344 | Annual |
+| Ticket to Work FY11-17 | US-GOV-SSA-1915 | One-time |
+| National Beneficiary Survey: Disability Statistics | US-GOV-SSA-3379 | Irregular |
+| 2016 Field Office Employee Counts | US-GOV-SSA-1918 | One-time |
+| 2016 Field Office Visitor Counts | US-GOV-SSA-1917 | One-time |
+| Field office claims appointments scheduled within 21 days, FY2005–2015 | US-GOV-SSA-431 | Discontinued |
+| DI & SSI Program Participants: Characteristics & Employment, 2015 | US-GOV-SSA-2278 | One-time |
+| National Survey of SSI Children and Families (2001–2002) | US-GOV-SSA-328 | One-time |
+| Red Book: A Guide to Work Incentives | none (manually checked link) | — |
+
+Names, links, dates and frequencies come from each dataset's Data.gov record. See [docs/datasets.md](docs/datasets.md) for how to add a dataset.
 
 ---
 

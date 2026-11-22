@@ -8,6 +8,7 @@ Provides a structured view of all known SSA data gaps and improvement opportunit
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from fastmcp import FastMCP
 
@@ -42,7 +43,7 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
                 "work employment ticket return incentive",
                 "ssi supplemental adequacy poverty income",
             ]
-            all_recs: list[dict] = []
+            all_recs: list[dict[str, Any]] = []
             seen_titles: set[str] = set()
             for topic in topics:
                 plan = svc.generate_recommendations(context=topic, max_recommendations=5)

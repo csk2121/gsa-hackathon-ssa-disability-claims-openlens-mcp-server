@@ -1,0 +1,43 @@
+{
+  "_comment": [
+    "Source of truth for WHERE each catalog entry's facts come from.",
+    "datagov: catalog dataset_id -> Data.gov dataset slug. Title, description, URLs,",
+    "  last-modified date, update frequency and temporal coverage are pulled from the",
+    "  Data.gov DCAT record by scripts/sync_catalog.py into datagov_snapshot.json.",
+    "  Never hand-type these facts into the Python catalog.",
+    "manual: entries with no Data.gov record. Each must say who checked the URL, how,",
+    "  and when. Tests fail if a manual verification is older than max_age_days."
+  ],
+  "datagov": {
+    "ssa-oasdi-beneficiaries-by-state": "oasdi-beneficiaries-by-state-and-county-series",
+    "ssa-ssi-recipients-by-state": "ssi-recipients-by-state-and-county-series",
+    "ssa-di-annual-statistical-report": "annual-statistical-report-on-the-social-security-disability-insurance-program",
+    "ssa-disability-claim-data": "ssa-disability-claim-data",
+    "ssa-state-agency-workload-data": "ssa-state-agency-workload-data",
+    "ssa-hearing-office-workload": "hearing-office-workload-data-current-report",
+    "ssa-hearing-wait-time": "average-wait-time-until-hearing-held-report-current-report",
+    "ssa-field-office-locator": "field-office-contact-information",
+    "ssa-field-office-visitors": "field-office-visitors-average-daily-fy-2006-on",
+    "ssa-initial-disability-processing-time": "combined-title-ii-disability-and-title-xvi-blind-and-disabled-average-processing-time-fy-2",
+    "ssa-reconsideration-processing-time": "disability-reconsideration-average-processing-time-excludes-technical-denials-fy2014-on",
+    "ssa-alj-disposition-data": "alj-disposition-data-current-report",
+    "ssa-dds-accuracy": "disability-determination-services-dds-accuracy",
+    "ssa-ticket-to-work-fy11-17": "ticket-to-work-fy11-17",
+    "ssa-national-beneficiary-survey": "national-beneficiary-survey-disability-statistics-series",
+    "ssa-field-office-employee-counts-2016": "2016-field-office-employee-counts",
+    "ssa-field-office-visitor-counts-2016": "2016-field-office-visitor-counts",
+    "ssa-field-office-appointments-21-days": "percentage-of-field-office-claims-appointments-scheduled-within-21-days-fy-2005-2015",
+    "ssa-di-ssi-participants-employment-2015": "di-ssi-program-participants-characteristics-employment-2015",
+    "ssa-nscf": "national-survey-of-ssi-children-and-families-nscf"
+  },
+  "manual": {
+    "ssa-red-book": {
+      "url": "https://www.ssa.gov/redbook/",
+      "title": "Red Book: A Guide to Work Incentives",
+      "verified_on": "2026-11-21",
+      "verified_by": "project maintainer",
+      "method": "Opened in a web browser (ssa.gov blocks automated link checks)",
+      "max_age_days": 180
+    }
+  }
+}

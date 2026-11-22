@@ -30,8 +30,10 @@ Design decisions:
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from ..models import (
@@ -43,31 +45,97 @@ from ..models import (
     Recommendation,
 )
 from ..services.recommendation_service import RecommendationService
-from ..utils import extract_keywords, get_logger, score_to_coverage_rating
+from ..utils import get_logger, score_to_coverage_rating
 
 _recommendation_service = RecommendationService()
 
 logger = get_logger(__name__)
 
+# ── Gap-claim evidence ─────────────────────────────────────────────────────────
+# Every element rated "None" must have an entry in data/gap_evidence.json recording
+# the Data.gov searches that found no SSA dataset for it (enforced by
+# tests/test_catalog_grounding.py; re-checked by scripts/check_gap_claims.py).
+
+GAP_EVIDENCE_PATH = Path(__file__).resolve().parent.parent / "data" / "gap_evidence.json"
+
+
+def _load_gap_evidence() -> dict[str, Any]:
+    try:
+        data: dict[str, Any] = json.loads(GAP_EVIDENCE_PATH.read_text(encoding="utf-8"))
+        return data
+    except FileNotFoundError:
+        logger.error(f"Gap evidence file missing: {GAP_EVIDENCE_PATH}")
+        return {}
+
+
+_GAP_EVIDENCE = _load_gap_evidence()
+
+
+def _evidence_note(element: str) -> str:
+    """One-line description of how the absence of `element` was checked."""
+    claim = _GAP_EVIDENCE.get("claims", {}).get(element)
+    if not claim:
+        return ""
+    queries = ", ".join(f"'{q}'" for q in claim.get("queries", []))
+    return (
+        f"Data.gov search of SSA datasets with downloads ({queries}) on "
+        f"{_GAP_EVIDENCE.get('searched_on', 'unknown date')}. {claim.get('verdict', '')}"
+    ).strip()
+
 
 # ── Coverage knowledge base ────────────────────────────────────────────────────
 # Maps semantic topic patterns → information element specifications.
-# Each entry describes:
-#   - patterns: regex fragments matched against the question
-#   - element: human-readable information element name
-#   - description: why it's needed
-#   - dataset_ids: which datasets partially or fully supply it
-#   - coverage_quality: Full | Partial | Proxy | None
-#   - weight: 1 (supporting) or 2 (critical)
+#
+# Rating rubric (enforced by tests/test_catalog_grounding.py):
+#   Full    — a catalogued dataset directly measures the element at the granularity
+#             the question needs, and is current.
+#   Partial — catalogued datasets measure it, but miss a needed level, breakdown,
+#             distribution or time period.
+#   Proxy   — only indirect, one-time, historical or discontinued data exists.
+#   None    — no SSA dataset on Data.gov provides it; backed by recorded searches
+#             in data/gap_evidence.json.
+# Full/Partial/Proxy entries must list datasets; None entries must list none.
+# Every entry states its rationale, which the report shows to the user.
+#
+# Fields:
+#   patterns:         regex fragments matched against the normalised question
+#   exclude_patterns: if any matches, the entry is skipped (avoids false matches)
+#   element / description / dataset_ids / coverage_quality / weight (2 = critical)
+#   rationale:        why this rating, citing the datasets' source records
+#   refines:          broader elements this entry measures at the level the question
+#                     asks for. When both are included, the broader ones become
+#                     supporting (weight 1), so e.g. a national average cannot stand in
+#                     for the per-office figure the question actually needs.
 
 @dataclass
 class _CoverageEntry:
-    patterns: list[str]           # Regex patterns to detect relevance
-    element: str                  # Information element name
-    description: str              # Why it's needed
-    dataset_ids: list[str]        # Datasets that supply it
-    coverage_quality: str         # Full | Partial | Proxy | None
-    weight: int = 1               # 1=supporting, 2=critical
+    patterns: list[str]
+    element: str
+    description: str
+    dataset_ids: list[str]
+    coverage_quality: str          # Full | Partial | Proxy | None
+    rationale: str
+    weight: int = 1                # 1 = supporting, 2 = critical
+    exclude_patterns: list[str] = field(default_factory=list)
+    refines: list[str] = field(default_factory=list)
+
+
+# Questions about how long *decisions* take at a local office (field office or state
+# DDS). Shared by the coverage entry and the intent entry below. Appointment, walk-in
+# and phone waits are service waits, not decision times, and hearing offices have
+# their own element ("Hearing-level wait times").
+_DECISION_WORDS = r"(decision|decide|processing|wait|delay|backlog|pending)"
+_OFFICE_DECISION_TIME_PATTERNS: list[str] = [
+    rf"(field|dds|local)\s*office.*{_DECISION_WORDS}",
+    rf"{_DECISION_WORDS}.*(field|dds|local)\s*office",
+    rf"\bdds\b.*{_DECISION_WORDS}",
+    rf"{_DECISION_WORDS}.*\bdds\b",
+    rf"disability\s*determination\s*service.*{_DECISION_WORDS}",
+]
+_OFFICE_DECISION_TIME_EXCLUDES: list[str] = [
+    r"appointment", r"walk.?in", r"in.?person", r"visit", r"lobby", r"phone",
+    r"hearing\s*office",
+]
 
 
 _COVERAGE_KB: list[_CoverageEntry] = [
@@ -75,36 +143,126 @@ _COVERAGE_KB: list[_CoverageEntry] = [
     _CoverageEntry(
         patterns=[r"wait\s*(time|period)", r"processing\s*time", r"how\s*long",
                   r"days?\s*(to|for)\s*(decide|decision|process)", r"backlog"],
+        exclude_patterns=[r"appointment"],
         element="Disability claim processing times",
-        description="Average or distribution of days from application to initial decision",
-        dataset_ids=["ssa-odar-pending-cases", "data-gov-ssa-performance"],
+        description="Average or distribution of days from application to decision",
+        dataset_ids=[
+            "ssa-initial-disability-processing-time",
+            "ssa-reconsideration-processing-time",
+            "ssa-hearing-office-workload",
+            "ssa-hearing-wait-time",
+        ],
         coverage_quality="Partial",
+        rationale=(
+            "Average processing times are published for initial claims (US-GOV-SSA-1409), "
+            "reconsiderations (US-GOV-SSA-1768) and hearings (US-GOV-SSA-303, -304), but only "
+            "as averages, with no state breakdown described for initial claims."
+        ),
         weight=2,
     ),
     _CoverageEntry(
-        patterns=[r"hearing\s*(wait|time|backlog|delay)", r"appeal.*wait", r"odar"],
+        patterns=_OFFICE_DECISION_TIME_PATTERNS,
+        exclude_patterns=_OFFICE_DECISION_TIME_EXCLUDES,
+        element="Disability decision times by field office or DDS",
+        description=(
+            "Time to a disability decision for claims taken at each field office, or decided "
+            "by each state Disability Determination Services (DDS) office"
+        ),
+        dataset_ids=[
+            "ssa-initial-disability-processing-time",
+            "ssa-state-agency-workload-data",
+            "ssa-hearing-office-workload",
+        ],
+        coverage_quality="Proxy",
+        rationale=(
+            "No dataset reports decision times per field office or per DDS. Initial-claim times "
+            "are national averages (US-GOV-SSA-1409), state agency data has pending counts by "
+            "state but no times (US-GOV-SSA-307), and per-office times exist only for hearing "
+            "offices (US-GOV-SSA-303), which are not mapped to field offices."
+        ),
+        weight=2,
+        refines=["Disability claim processing times"],
+    ),
+    _CoverageEntry(
+        patterns=[r"hearing\s*(wait|time|backlog|delay)", r"appeal.*wait", r"odar", r"\boho\b"],
         element="Hearing-level wait times",
         description="Time from request for hearing to hearing office decision",
-        dataset_ids=["ssa-odar-pending-cases"],
+        dataset_ids=["ssa-hearing-office-workload", "ssa-hearing-wait-time"],
         coverage_quality="Partial",
+        rationale=(
+            "Average processing time per hearing office and average months to a hearing are "
+            "published monthly (US-GOV-SSA-303, -304); no distributions."
+        ),
+        weight=2,
+    ),
+    _CoverageEntry(
+        patterns=[
+            r"entire\s*(disability\s*)?process", r"end.to.end", r"from\s*application\s*to",
+            r"final\s*decision", r"ultimately", r"after\s*all\s*appeal", r"all\s*(decision\s*)?levels?",
+            r"eventually\s*(approved|allowed|denied)", r"overall\s*(approval|allowance)",
+        ],
+        element="Linked claim history across decision levels",
+        description=(
+            "Following the same claims from application through reconsideration and hearing, "
+            "needed for final approval rates and end-to-end waiting times"
+        ),
+        dataset_ids=[
+            "ssa-state-agency-workload-data",
+            "ssa-alj-disposition-data",
+            "ssa-initial-disability-processing-time",
+            "ssa-reconsideration-processing-time",
+            "ssa-hearing-wait-time",
+        ],
+        coverage_quality="Proxy",
+        rationale=(
+            "Each decision level publishes its own counts and average times for different groups "
+            "of claims (US-GOV-SSA-307, -299, -1409, -1768, -304). They cannot be linked to follow "
+            "the same claims, so final rates and total waits can only be approximated."
+        ),
         weight=2,
     ),
     _CoverageEntry(
         patterns=[r"appointment", r"walk.?in", r"office\s*visit", r"in.?person",
-                  r"walk.?in\s*traffic", r"appointment\s*volume"],
+                  r"walk.?in\s*traffic", r"appointment\s*volume", r"visitor"],
         element="Field office appointment and walk-in volume",
         description="Volume of in-person visits and appointments at SSA field offices",
-        dataset_ids=[],
-        coverage_quality="None",
+        dataset_ids=["ssa-field-office-visitors", "ssa-field-office-visitor-counts-2016"],
+        coverage_quality="Proxy",
+        rationale=(
+            "Average daily visitors is published (US-GOV-SSA-434), but per-office visitor counts "
+            "exist only for FY2016 (US-GOV-SSA-1917), and appointment volumes are not published."
+        ),
+        weight=2,
+    ),
+    _CoverageEntry(
+        patterns=[r"appointment.*wait", r"wait.*appointment", r"appointment\s*(delay|backlog)"],
+        element="Field office appointment wait times",
+        description="Time to get a field office appointment, per office and current",
+        dataset_ids=["ssa-field-office-appointments-21-days"],
+        coverage_quality="Proxy",
+        rationale=(
+            "Only a discontinued series exists: the share of claims appointments scheduled within "
+            "21 days, FY2005–2015 (US-GOV-SSA-431). No current or per-office wait times."
+        ),
         weight=2,
     ),
     # ── Geographic analysis ────────────────────────────────────────────────────
     _CoverageEntry(
-        patterns=[r"state", r"geographic", r"region", r"county", r"local", r"area"],
+        patterns=[r"\bstate\b", r"geographic", r"region", r"\bcounty\b", r"\blocal\b", r"\barea\b",
+                  r"part\s*of\s*the\s*country", r"across\s*the\s*country"],
         element="Geographic disaggregation of outcomes",
         description="Disability outcomes broken down by state or sub-state geography",
-        dataset_ids=["ssa-oasdi-beneficiaries-by-state", "ssa-ssi-recipients-by-state", "ssa-odar-pending-cases"],
+        dataset_ids=[
+            "ssa-disability-claim-data",
+            "ssa-state-agency-workload-data",
+            "ssa-oasdi-beneficiaries-by-state",
+            "ssa-ssi-recipients-by-state",
+        ],
         coverage_quality="Partial",
+        rationale=(
+            "Claims and allowances are published by state (US-GOV-SSA-307, -308) and beneficiaries "
+            "by state and county (US-GOV-SSA-3378, -3414); claim outcomes stop at state level."
+        ),
         weight=1,
     ),
     _CoverageEntry(
@@ -113,6 +271,10 @@ _COVERAGE_KB: list[_CoverageEntry] = [
         description="Geographic distribution of SSA field offices",
         dataset_ids=["ssa-field-office-locator"],
         coverage_quality="Full",
+        rationale=(
+            "Locations, phone numbers and hours of every field office are published and updated "
+            "quarterly (US-GOV-SSA-1733)."
+        ),
         weight=1,
     ),
     _CoverageEntry(
@@ -125,19 +287,31 @@ _COVERAGE_KB: list[_CoverageEntry] = [
             "Per-field-office operational data: staffing levels, appointment volumes, "
             "walk-in traffic, and wait times needed to rank offices by service demand"
         ),
-        dataset_ids=[],
-        coverage_quality="None",
+        dataset_ids=[
+            "ssa-field-office-visitor-counts-2016",
+            "ssa-field-office-employee-counts-2016",
+            "ssa-field-office-visitors",
+        ],
+        coverage_quality="Proxy",
+        rationale=(
+            "Per-office staffing and visitor counts exist for FY2016 only (FOIA releases "
+            "US-GOV-SSA-1917, -1918); there is no current per-office series."
+        ),
         weight=2,
     ),
     # ── Staffing / workload ────────────────────────────────────────────────────
     _CoverageEntry(
-        patterns=[r"staffing", r"staff\s*level", r"headcount", r"employees?", r"workers?\s*at",
+        patterns=[r"staffing", r"staff\s*level", r"headcount", r"employee", r"worker\s*at",
                   r"how\s*many.*staff", r"staff.*work\s*at", r"work\s*at.*office",
                   r"staff.*capacity", r"office.*staff"],
         element="SSA office staffing levels",
         description="Number of adjudicators or staff at field or hearing offices",
-        dataset_ids=[],
-        coverage_quality="None",
+        dataset_ids=["ssa-field-office-employee-counts-2016"],
+        coverage_quality="Proxy",
+        rationale=(
+            "Field office employee counts were released once, for FY2016 (US-GOV-SSA-1918); no "
+            "hearing office staffing data is in the catalog."
+        ),
         weight=2,
     ),
     _CoverageEntry(
@@ -146,111 +320,206 @@ _COVERAGE_KB: list[_CoverageEntry] = [
                   r"demand.*office", r"office.*demand"],
         element="Office workload and capacity",
         description="Case volume relative to office processing capacity",
-        dataset_ids=["ssa-odar-pending-cases"],
+        dataset_ids=["ssa-hearing-office-workload", "ssa-state-agency-workload-data"],
         coverage_quality="Proxy",
+        rationale=(
+            "Workload volumes are published for hearing offices (US-GOV-SSA-303) and state agencies "
+            "(US-GOV-SSA-307), but without staffing or capacity to relate them to."
+        ),
         weight=2,
     ),
     # ── Demographics ───────────────────────────────────────────────────────────
     _CoverageEntry(
-        patterns=[r"age\s*group", r"age\s*of\s*applicants?", r"older\s*workers?", r"young\s*(disabled|applicants?)"],
+        patterns=[r"age\s*group", r"age\s*of\s*applicant", r"older\s*worker", r"young\s*(disabled|applicant)",
+                  r"\bby\s*age\b"],
         element="Applicant age distribution",
         description="Age breakdown of disability applicants and recipients",
-        dataset_ids=["ssa-disability-applications-decisions", "ssa-disability-research-statistics"],
+        dataset_ids=["ssa-di-annual-statistical-report"],
         coverage_quality="Partial",
+        rationale=(
+            "The SSDI Annual Statistical Report gives demographic statistics on beneficiaries "
+            "(US-GOV-SSA-1667); applicant age is not in the claim-level datasets."
+        ),
         weight=1,
     ),
     _CoverageEntry(
-        patterns=[r"\bsex\b", r"\bgender\b", r"men\b", r"women\b", r"male", r"female"],
+        patterns=[r"\bsex\b", r"\bgender\b", r"\bmen\b", r"\bwomen\b", r"\bmale\b", r"\bfemale\b"],
         element="Gender disaggregation",
         description="Disability outcomes broken down by gender",
-        dataset_ids=["ssa-disability-research-statistics"],
+        dataset_ids=["ssa-di-annual-statistical-report"],
         coverage_quality="Partial",
+        rationale=(
+            "Beneficiary demographics are in the SSDI Annual Statistical Report (US-GOV-SSA-1667); "
+            "no claim-level dataset is described with a sex breakdown."
+        ),
         weight=1,
     ),
     _CoverageEntry(
-        patterns=[r"race", r"ethnic", r"racial\s*dispar", r"minority", r"hispanic", r"black", r"white"],
+        patterns=[r"\brace\b", r"ethnic", r"racial", r"minority", r"hispanic", r"\bblack\b", r"\bwhite\b"],
         element="Race and ethnicity data",
         description="Disability application, award, and denial rates by race/ethnicity",
         dataset_ids=[],
         coverage_quality="None",
+        rationale="No SSA dataset on Data.gov reports race or ethnicity (see search evidence).",
         weight=2,
     ),
     _CoverageEntry(
-        patterns=[r"income", r"poverty", r"low.income", r"economic", r"socioeconomic"],
-        element="Applicant income and economic status",
-        description="Relationship between income level and disability program access/outcomes",
-        dataset_ids=[],
-        coverage_quality="None",
+        patterns=[r"income", r"poverty", r"low.income", r"economic", r"socioeconomic",
+                  r"adequa", r"cost\s*of\s*living", r"living\s*cost", r"afford", r"basic\s*need"],
+        element="Income and economic status of applicants and recipients",
+        description=(
+            "Income, assets and living costs of applicants and recipients, needed to judge "
+            "program access and benefit adequacy"
+        ),
+        dataset_ids=["ssa-nscf"],
+        coverage_quality="Proxy",
+        rationale=(
+            "The only source is a one-time 2001–2002 survey of SSI children and families, including "
+            "applicants (US-GOV-SSA-328). No adult or current data on applicant or recipient income."
+        ),
         weight=2,
     ),
     # ── Impairments ────────────────────────────────────────────────────────────
     _CoverageEntry(
-        patterns=[r"impairment", r"diagnosis", r"condition", r"disease", r"mental\s*(health|disorder)",
+        patterns=[r"impairment", r"diagnos", r"condition", r"disease", r"mental\s*(health|disorder)",
                   r"musculoskeletal", r"disability\s*type"],
         element="Impairment/diagnosis categories",
         description="Distribution of disabilities by medical category",
-        dataset_ids=["ssa-disability-applications-decisions"],
+        dataset_ids=["ssa-di-annual-statistical-report"],
         coverage_quality="Partial",
+        rationale=(
+            "Beneficiary statistics are in the SSDI Annual Statistical Report (US-GOV-SSA-1667); "
+            "no claim-level dataset is described with diagnosis categories."
+        ),
         weight=1,
     ),
     # ── Program outcomes ───────────────────────────────────────────────────────
     _CoverageEntry(
-        patterns=[r"allowance\s*rate", r"approval\s*rate", r"denial\s*rate", r"award\s*rate"],
+        patterns=[r"allowance", r"approval", r"\bapproved\b", r"\ballowed\b", r"award\s*rate",
+                  r"denial\s*rate", r"favorable"],
         element="Disability program allowance rates",
         description="Percentage of applications approved at each decision level",
-        dataset_ids=["ssa-disability-applications-decisions"],
+        dataset_ids=["ssa-disability-claim-data", "ssa-state-agency-workload-data", "ssa-alj-disposition-data"],
         coverage_quality="Partial",
+        rationale=(
+            "Allowances are published by state for initial and reconsideration decisions "
+            "(US-GOV-SSA-307, -308) and by judge and hearing office for hearings (US-GOV-SSA-299); "
+            "the levels are not linked and nothing goes below state level."
+        ),
         weight=2,
     ),
     _CoverageEntry(
-        patterns=[r"application\s*(volume|count|number|trend)", r"applicants?", r"filed"],
+        patterns=[r"denial\s*reason", r"reason.*(denied|denial)", r"why.*(denied|rejected)",
+                  r"(denied|denial).*because", r"technical\s*denial", r"basis\s*for\s*denial"],
+        element="Reasons for claim denials",
+        description="Why claims are denied (medical vs. technical reasons, by category)",
+        dataset_ids=[],
+        coverage_quality="None",
+        rationale="No SSA dataset on Data.gov reports denial reasons (see search evidence).",
+        weight=2,
+    ),
+    _CoverageEntry(
+        patterns=[r"application\s*(volume|count|number|trend)", r"applicant", r"\bfiled\b",
+                  r"how\s*many.*appl"],
         element="Application volumes",
         description="Number of disability applications submitted over time",
-        dataset_ids=["ssa-disability-applications-decisions"],
+        dataset_ids=["ssa-disability-claim-data", "ssa-state-agency-workload-data"],
         coverage_quality="Full",
+        rationale=(
+            "Initial claim receipts are published by state, monthly from October 2000 "
+            "(US-GOV-SSA-307) and by fiscal year (US-GOV-SSA-308)."
+        ),
         weight=1,
     ),
     _CoverageEntry(
-        patterns=[r"benefit\s*(amount|level|adequacy)", r"monthly\s*payment", r"average\s*benefit"],
+        patterns=[r"benefit\s*(amount|level|adequacy)", r"monthly\s*payment", r"average\s*benefit",
+                  r"payment\s*amount"],
         element="Benefit amounts by geography and demographics",
         description="Average disability benefit payments",
-        dataset_ids=["ssa-oasdi-beneficiaries-by-state", "ssa-disability-research-statistics"],
+        dataset_ids=["ssa-oasdi-beneficiaries-by-state", "ssa-di-annual-statistical-report"],
         coverage_quality="Partial",
+        rationale=(
+            "Benefit statistics are in the state/county and annual SSDI reports (US-GOV-SSA-3378, "
+            "-1667); which amount breakdowns they include has not been checked against the tables."
+        ),
         weight=1,
     ),
     _CoverageEntry(
-        patterns=[r"beneficiar(y|ies)", r"recipients?", r"enrolled", r"on\s*(SSDI|SSI)"],
+        patterns=[r"beneficiar(y|ies)", r"recipient", r"enrolled", r"on\s*(ssdi|ssi)\b"],
         element="Beneficiary/recipient counts",
         description="Number of people currently receiving disability benefits",
         dataset_ids=["ssa-oasdi-beneficiaries-by-state", "ssa-ssi-recipients-by-state"],
         coverage_quality="Full",
+        rationale=(
+            "Beneficiary and recipient counts are published annually by state and county "
+            "(US-GOV-SSA-3378, -3414)."
+        ),
         weight=1,
     ),
     # ── Appeals ────────────────────────────────────────────────────────────────
     _CoverageEntry(
-        patterns=[r"appeal", r"reconsider", r"hearing", r"alj\b", r"administrative\s*law"],
+        patterns=[r"appeal", r"reconsider", r"hearing", r"\balj\b", r"administrative\s*law"],
         element="Appeals and hearing outcomes",
         description="Results and processing metrics for disability appeal hearings",
-        dataset_ids=["ssa-odar-pending-cases"],
+        dataset_ids=[
+            "ssa-alj-disposition-data",
+            "ssa-hearing-office-workload",
+            "ssa-hearing-wait-time",
+            "ssa-state-agency-workload-data",
+        ],
         coverage_quality="Partial",
+        rationale=(
+            "Hearing outcomes by judge and office (US-GOV-SSA-299), hearing workloads and waits "
+            "(US-GOV-SSA-303, -304) and reconsideration outcomes by state (US-GOV-SSA-307) are "
+            "published; Appeals Council and court outcomes are not in the catalog."
+        ),
         weight=1,
     ),
     # ── Employment / return to work ────────────────────────────────────────────
     _CoverageEntry(
-        patterns=[r"return\s*to\s*work", r"employment", r"ticket\s*to\s*work", r"work\s*incentive", r"sga\b"],
-        element="Work incentive program participation and outcomes",
-        description="Participation in and outcomes from SSA work incentive programs",
-        dataset_ids=["ssa-red-book"],
-        coverage_quality="Proxy",
+        patterns=[r"ticket\s*to\s*work", r"work\s*incentive", r"\bsga\b", r"trial\s*work",
+                  r"employment\s*network"],
+        element="Work incentive program participation",
+        description="Participation in SSA work incentive programs such as Ticket to Work",
+        dataset_ids=["ssa-ticket-to-work-fy11-17", "ssa-national-beneficiary-survey", "ssa-red-book"],
+        coverage_quality="Partial",
+        rationale=(
+            "Ticket assignments were released for FY2011–2017 only (US-GOV-SSA-1915); survey "
+            "statistics on program participation exist for 2015 and 2019 (US-GOV-SSA-3379)."
+        ),
         weight=1,
+    ),
+    _CoverageEntry(
+        patterns=[r"return\s*to\s*work", r"back\s*to\s*work", r"employment\s*outcome",
+                  r"(work|working|employed)\s*after", r"leave\s*the\s*rolls",
+                  r"stop.*benefit.*work", r"\bemployment\b"],
+        element="Return-to-work outcomes",
+        description="How many beneficiaries work, earn above thresholds, or leave benefits because of work",
+        dataset_ids=["ssa-di-ssi-participants-employment-2015", "ssa-national-beneficiary-survey"],
+        coverage_quality="Proxy",
+        rationale=(
+            "Only one-time descriptive sources exist: a 2015 chartbook on work activity before and "
+            "after award (US-GOV-SSA-2278) and survey statistics for 2015 and 2019 "
+            "(US-GOV-SSA-3379). No ongoing outcome series."
+        ),
+        weight=2,
     ),
     # ── Performance metrics ────────────────────────────────────────────────────
     _CoverageEntry(
-        patterns=[r"performance", r"target", r"goal", r"accuracy", r"customer\s*satisfaction"],
+        patterns=[r"performance", r"target", r"\bgoal", r"accuracy", r"customer\s*satisfaction"],
         element="Agency performance metrics",
         description="SSA operational performance against official targets",
-        dataset_ids=["data-gov-ssa-performance"],
+        dataset_ids=[
+            "ssa-initial-disability-processing-time",
+            "ssa-dds-accuracy",
+            "ssa-reconsideration-processing-time",
+            "ssa-hearing-wait-time",
+        ],
         coverage_quality="Partial",
+        rationale=(
+            "Processing times (US-GOV-SSA-1409, -1768, -304) and DDS decision accuracy "
+            "(US-GOV-SSA-344) are published; performance targets are not in the catalog."
+        ),
         weight=1,
     ),
     # ── SSI-specific ───────────────────────────────────────────────────────────
@@ -260,6 +529,10 @@ _COVERAGE_KB: list[_CoverageEntry] = [
         description="Supplemental Security Income recipient and payment data",
         dataset_ids=["ssa-ssi-recipients-by-state"],
         coverage_quality="Partial",
+        rationale=(
+            "Recipients, federal payments and state supplementation are published annually by "
+            "state and county (US-GOV-SSA-3414); no monthly or recipient-level detail."
+        ),
         weight=1,
     ),
     # ── SSDI-specific ──────────────────────────────────────────────────────────
@@ -267,8 +540,12 @@ _COVERAGE_KB: list[_CoverageEntry] = [
         patterns=[r"\bssdi\b", r"disability\s*insurance", r"title\s*ii"],
         element="SSDI program data",
         description="Social Security Disability Insurance beneficiary data",
-        dataset_ids=["ssa-oasdi-beneficiaries-by-state", "ssa-disability-research-statistics"],
+        dataset_ids=["ssa-oasdi-beneficiaries-by-state", "ssa-di-annual-statistical-report"],
         coverage_quality="Partial",
+        rationale=(
+            "Beneficiaries are published by state and county (US-GOV-SSA-3378) and in the annual "
+            "SSDI report (US-GOV-SSA-1667); both are annual."
+        ),
         weight=1,
     ),
     # ── Accessibility / geographic equity ─────────────────────────────────────
@@ -277,6 +554,8 @@ _COVERAGE_KB: list[_CoverageEntry] = [
             r"rural", r"urban", r"geographic\s*equit", r"regional\s*dispar",
             r"underserved", r"service\s*gap", r"service\s*desert", r"county\s*coverage",
             r"office\s*coverage", r"less\s*access", r"access.*rural", r"rural.*access",
+            r"sparse", r"relative\s*to\s*(the\s*)?(disab|population|beneficiar)",
+            r"office.*per\s*(capita|beneficiar|person)",
         ],
         element="Geographic distribution of disability service access",
         description=(
@@ -289,39 +568,51 @@ _COVERAGE_KB: list[_CoverageEntry] = [
             "ssa-ssi-recipients-by-state",
         ],
         coverage_quality="Partial",
+        rationale=(
+            "Office locations (US-GOV-SSA-1733) can be joined to county beneficiary counts "
+            "(US-GOV-SSA-3378, -3414), but there are no service areas, travel times or "
+            "per-office demand to measure access directly."
+        ),
         weight=2,
     ),
     _CoverageEntry(
         patterns=[
             r"travel\s*distance", r"distance\s*to\s*(office|ssa)", r"nearest\s*office",
-            r"miles?\s*(to|from)\s*office", r"drive\s*time",
+            r"miles?\s*(to|from)\s*office", r"drive\s*time", r"travel\s*time",
         ],
         element="Travel distance to nearest SSA field office",
         description="Distance or travel time between claimant location and nearest field office",
         dataset_ids=[],
         coverage_quality="None",
+        rationale="No SSA dataset on Data.gov reports travel distance or time (see search evidence).",
         weight=2,
     ),
     _CoverageEntry(
         patterns=[
             r"service\s*area\s*boundar", r"office\s*boundar", r"coverage\s*area",
-            r"catchment\s*area",
+            r"catchment\s*area", r"service\s*area",
         ],
         element="Field office service area boundaries",
         description="Defined geographic service areas for each SSA field office",
         dataset_ids=[],
         coverage_quality="None",
+        rationale="No SSA dataset on Data.gov defines field office service areas (see search evidence).",
         weight=1,
     ),
     _CoverageEntry(
         patterns=[
             r"accessib(ility|le)\s*(accommodation|feature|service)",
             r"ada\s*compliance", r"disability\s*access(ib)?", r"physical\s*access",
+            r"wheelchair", r"interpreter", r"language\s*service",
         ],
         element="Accessibility accommodations at field offices",
         description="ADA compliance status, language services, and physical accessibility features",
         dataset_ids=[],
         coverage_quality="None",
+        rationale=(
+            "No SSA dataset on Data.gov describes accessibility or accommodations at field offices; "
+            "only national interpreter call counts exist (see search evidence)."
+        ),
         weight=1,
     ),
     _CoverageEntry(
@@ -331,8 +622,12 @@ _COVERAGE_KB: list[_CoverageEntry] = [
         ],
         element="Disability application counts by county",
         description="Number of disability applications disaggregated to county level",
-        dataset_ids=["ssa-disability-applications-decisions"],
+        dataset_ids=["ssa-disability-claim-data", "ssa-state-agency-workload-data"],
         coverage_quality="Proxy",
+        rationale=(
+            "Applications are published by state only (US-GOV-SSA-307, -308), a proxy for "
+            "county detail."
+        ),
         weight=1,
     ),
 ]
@@ -353,9 +648,44 @@ class _IntentEntry:
     seed_elements: list[str]        # element names to force-include in matching
     context_dataset_ids: list[str]  # datasets that provide domain context even when they
                                     # don't directly answer the question
+    exclude_patterns: list[str] = field(default_factory=list)
+    premise_note: str = ""          # shown when the question rests on a common misconception
+
+
+def _intent_matches(entry: _IntentEntry, variants: tuple[str, str]) -> bool:
+    return _matches(entry.patterns, variants) and not _matches(entry.exclude_patterns, variants)
 
 
 _INTENT_KB: list[_IntentEntry] = [
+    # First, so "Which field offices have the highest backlog?" is read as a question
+    # about decision times rather than service demand.
+    _IntentEntry(
+        patterns=_OFFICE_DECISION_TIME_PATTERNS,
+        exclude_patterns=_OFFICE_DECISION_TIME_EXCLUDES,
+        category="Performance",
+        primary_intent_template="Rank SSA offices by how long disability decisions take",
+        required_data_types=[
+            "Decision times by the office that decides the claim",
+            "Pending claims by office",
+            "Mapping of field offices to the offices that decide their claims",
+        ],
+        scope="Field office level",
+        seed_elements=[
+            "Disability decision times by field office or DDS",
+            "Disability claim processing times",
+        ],
+        context_dataset_ids=[
+            "ssa-hearing-office-workload",
+            "ssa-hearing-wait-time",
+            "ssa-state-agency-workload-data",
+        ],
+        premise_note=(
+            "Field offices take disability applications and check non-medical eligibility, "
+            "but they do not make the medical decision. Initial and reconsideration decisions "
+            "are made by each state's Disability Determination Services (DDS), and appeals by "
+            "hearing offices, so decision times belong to those offices."
+        ),
+    ),
     _IntentEntry(
         patterns=[r"field\s*office.*demand", r"which.*office.*high", r"busiest.*office",
                   r"office.*service.*demand", r"highest.*demand"],
@@ -372,7 +702,7 @@ _INTENT_KB: list[_IntentEntry] = [
             "ssa-field-office-locator",
             "ssa-oasdi-beneficiaries-by-state",
             "ssa-ssi-recipients-by-state",
-            "ssa-odar-pending-cases",
+            "ssa-hearing-office-workload",
         ],
     ),
     _IntentEntry(
@@ -407,8 +737,8 @@ _INTENT_KB: list[_IntentEntry] = [
             "ssa-field-office-locator",
             "ssa-oasdi-beneficiaries-by-state",
             "ssa-ssi-recipients-by-state",
-            "ssa-odar-pending-cases",
-            "ssa-disability-applications-decisions",
+            "ssa-hearing-office-workload",
+            "ssa-disability-claim-data",
         ],
     ),
     _IntentEntry(
@@ -436,8 +766,8 @@ _INTENT_KB: list[_IntentEntry] = [
             "ssa-field-office-locator",
             "ssa-oasdi-beneficiaries-by-state",
             "ssa-ssi-recipients-by-state",
-            "ssa-odar-pending-cases",
-            "ssa-disability-applications-decisions",
+            "ssa-hearing-office-workload",
+            "ssa-disability-claim-data",
         ],
     ),
     _IntentEntry(
@@ -448,9 +778,9 @@ _INTENT_KB: list[_IntentEntry] = [
         scope="National",
         seed_elements=["Race and ethnicity data", "Disability program allowance rates"],
         context_dataset_ids=[
-            "ssa-disability-applications-decisions",
-            "ssa-oasdi-beneficiaries-by-state",
-            "ssa-disability-research-statistics",
+            "ssa-disability-claim-data",
+            "ssa-state-agency-workload-data",
+            "ssa-di-annual-statistical-report",
         ],
     ),
     _IntentEntry(
@@ -462,9 +792,9 @@ _INTENT_KB: list[_IntentEntry] = [
         scope="State level",
         seed_elements=["Disability claim processing times", "Geographic disaggregation of outcomes"],
         context_dataset_ids=[
-            "ssa-odar-pending-cases",
-            "data-gov-ssa-performance",
-            "ssa-oasdi-beneficiaries-by-state",
+            "ssa-hearing-office-workload",
+            "ssa-hearing-wait-time",
+            "ssa-state-agency-workload-data",
         ],
     ),
     _IntentEntry(
@@ -473,11 +803,10 @@ _INTENT_KB: list[_IntentEntry] = [
         primary_intent_template="Evaluate SSI benefit adequacy relative to recipient income and poverty levels",
         required_data_types=["Recipient income data", "Benefit payment amounts", "Local cost-of-living indicators"],
         scope="National and state level",
-        seed_elements=["Applicant income and economic status", "Benefit amounts by geography and demographics"],
+        seed_elements=["Income and economic status of applicants and recipients", "Benefit amounts by geography and demographics"],
         context_dataset_ids=[
             "ssa-ssi-recipients-by-state",
             "ssa-oasdi-beneficiaries-by-state",
-            "ssa-disability-research-statistics",
         ],
     ),
     _IntentEntry(
@@ -486,10 +815,9 @@ _INTENT_KB: list[_IntentEntry] = [
         primary_intent_template="Measure outcomes of SSA work incentive programs for disability beneficiaries",
         required_data_types=["Ticket to Work participation", "Trial Work Period outcomes", "Return-to-work rates"],
         scope="National",
-        seed_elements=["Work incentive program participation and outcomes"],
+        seed_elements=["Work incentive program participation", "Return-to-work outcomes"],
         context_dataset_ids=[
             "ssa-red-book",
-            "ssa-disability-applications-decisions",
         ],
     ),
     # ── Accessibility ──────────────────────────────────────────────────────────
@@ -525,8 +853,8 @@ _INTENT_KB: list[_IntentEntry] = [
             "ssa-field-office-locator",
             "ssa-ssi-recipients-by-state",
             "ssa-oasdi-beneficiaries-by-state",
-            "ssa-disability-applications-decisions",
-            "ssa-odar-pending-cases",
+            "ssa-disability-claim-data",
+            "ssa-hearing-office-workload",
         ],
     ),
     # ── Geographic equity ──────────────────────────────────────────────────────
@@ -559,8 +887,8 @@ _INTENT_KB: list[_IntentEntry] = [
             "ssa-field-office-locator",
             "ssa-oasdi-beneficiaries-by-state",
             "ssa-ssi-recipients-by-state",
-            "ssa-disability-applications-decisions",
-            "ssa-odar-pending-cases",
+            "ssa-disability-claim-data",
+            "ssa-hearing-office-workload",
         ],
     ),
 ]
@@ -591,9 +919,88 @@ def _compute_weighted_score(elements: list[InformationElement], weights: list[in
 
     weighted_sum = sum(
         _QUALITY_SCORE.get(el.coverage_quality, 0.0) * w
-        for el, w in zip(elements, weights)
+        for el, w in zip(elements, weights, strict=True)
     )
     return round((weighted_sum / total_weight) * 100, 1)
+
+
+# Rubric rule: a question cannot be rated higher than its best *critical* element
+# allows. If every critical element is only Proxy/None, the answer is at most
+# Limited; if the best critical element is Partial, at most Partial. Supporting
+# elements that happen to be fully covered cannot lift the rating past this.
+_CRITICAL_CAP: dict[str, tuple[float, str]] = {
+    "None": (39.0, "Limited"),
+    "Proxy": (39.0, "Limited"),
+    "Partial": (74.0, "Partial"),
+}
+_QUALITY_ORDER = ["None", "Proxy", "Partial", "Full"]
+
+
+def _apply_critical_cap(
+    score: float, elements: list[InformationElement], weights: list[int]
+) -> tuple[float, str]:
+    """Return (score, note) after applying the critical-element cap."""
+    critical = [el for el, w in zip(elements, weights, strict=True) if w == 2]
+    if not critical:
+        return score, ""
+    best = max((el.coverage_quality for el in critical), key=_QUALITY_ORDER.index)
+    cap = _CRITICAL_CAP.get(best)
+    if cap is None or score <= cap[0]:
+        return score, ""
+    return cap[0], (
+        f"Rating capped at {cap[1]}: the best-covered critical element is rated {best}, "
+        "so better-covered supporting elements cannot raise the overall rating."
+    )
+
+
+# ── Question normalisation and scope ───────────────────────────────────────────
+
+_SINGULAR_EXCEPTIONS = {
+    "ssi", "ssdi", "status", "access", "process", "business", "analysis", "basis",
+    "less", "across", "address", "class", "gross", "progress", "this", "his", "has",
+    "was", "does", "is", "its", "yes", "us", "as", "always", "perhaps", "whereas",
+}
+
+
+def _singular(word: str) -> str:
+    if len(word) <= 3 or word in _SINGULAR_EXCEPTIONS or word.endswith(("ss", "us", "is")):
+        return word
+    if word.endswith("ies"):
+        return word[:-3] + "y"
+    if word.endswith(("ches", "shes", "xes", "sses")):
+        return word[:-2]
+    if word.endswith("s"):
+        return word[:-1]
+    return word
+
+
+def normalise_question(question: str) -> tuple[str, str]:
+    """Return the question lower-cased, and the same text with plurals singularised."""
+    lowered = " ".join(question.lower().split())
+    return lowered, re.sub(r"[a-z]+", lambda m: _singular(m.group(0)), lowered)
+
+
+def _matches(patterns: list[str], variants: tuple[str, str]) -> bool:
+    return any(re.search(p, v) for p in patterns for v in variants)
+
+
+def _entry_matches(entry: _CoverageEntry, variants: tuple[str, str]) -> bool:
+    return _matches(entry.patterns, variants) and not _matches(entry.exclude_patterns, variants)
+
+
+_SCOPE_RULES: list[tuple[str, str]] = [
+    (r"hearing\s*office|\balj\b|\bjudge", "Hearing office level"),
+    (r"field\s*office", "Field office level"),
+    (r"\bzip\b|census\s*tract", "ZIP / sub-county level"),
+    (r"\bcounty\b|\blocal\b|\brural\b|\burban\b|\bcommunity\b", "County level"),
+    (r"\bstate\b", "State level"),
+    (r"\bregion", "Regional level"),
+]
+
+
+def detect_scope(variants: tuple[str, str]) -> str:
+    """Geographic or organisational scope named in the question, if any."""
+    return ", ".join(label for pattern, label in _SCOPE_RULES if _matches([pattern], variants))
 
 
 # ── Main engine ────────────────────────────────────────────────────────────────
@@ -627,14 +1034,16 @@ class AnswerCoverageEngine:
         The intent is used to (a) display what the engine understood, and (b)
         seed required elements before keyword matching begins.
         """
-        q = question.lower()
+        variants = normalise_question(question)
         for entry in _INTENT_KB:
-            if any(re.search(p, q) for p in entry.patterns):
+            if _intent_matches(entry, variants):
                 return IntentAnalysis(
                     primary_intent=entry.primary_intent_template,
                     intent_category=entry.category,
                     required_data_types=entry.required_data_types,
-                    scope=entry.scope,
+                    # The scope the question names wins over the intent's default.
+                    scope=detect_scope(variants) or entry.scope,
+                    premise_note=entry.premise_note,
                 )
         return None
 
@@ -643,10 +1052,10 @@ class AnswerCoverageEngine:
         Return KB entries that the intent KB says are always required for this question,
         regardless of whether the keywords appear explicitly.
         """
-        q = question.lower()
+        variants = normalise_question(question)
         seeded: list[tuple[_CoverageEntry, int]] = []
         for intent_entry in _INTENT_KB:
-            if any(re.search(p, q) for p in intent_entry.patterns):
+            if _intent_matches(intent_entry, variants):
                 for element_name in intent_entry.seed_elements:
                     kb_entry = self._kb_by_element.get(element_name)
                     if kb_entry:
@@ -657,12 +1066,8 @@ class AnswerCoverageEngine:
 
     def _match_entries(self, question: str) -> list[tuple[_CoverageEntry, int]]:
         """Return (entry, weight) pairs where the entry patterns match the question."""
-        question_lower = question.lower()
-        matched: list[tuple[_CoverageEntry, int]] = []
-        for entry in self._kb:
-            if any(re.search(p, question_lower) for p in entry.patterns):
-                matched.append((entry, entry.weight))
-        return matched
+        variants = normalise_question(question)
+        return [(entry, entry.weight) for entry in self._kb if _entry_matches(entry, variants)]
 
     # ── Step 3: Merge seeded + matched (deduplicate by element name) ───────────
 
@@ -679,6 +1084,14 @@ class AnswerCoverageEngine:
                 seen.add(entry.element)
         return merged
 
+    @staticmethod
+    def _apply_refinements(
+        entries: list[tuple[_CoverageEntry, int]],
+    ) -> list[tuple[_CoverageEntry, int]]:
+        """Demote broader elements to supporting when a more specific one is included."""
+        refined = {name for entry, _ in entries for name in entry.refines}
+        return [(entry, 1 if entry.element in refined else w) for entry, w in entries]
+
     # ── Step 4: Build InformationElements ─────────────────────────────────────
 
     def _build_elements(
@@ -691,6 +1104,7 @@ class AnswerCoverageEngine:
                 available=entry.coverage_quality != "None",
                 dataset_ids=entry.dataset_ids,
                 coverage_quality=entry.coverage_quality,
+                rationale=entry.rationale,
             )
             for entry, _ in matched
         ]
@@ -698,7 +1112,7 @@ class AnswerCoverageEngine:
     # ── Step 5: Gap analysis ───────────────────────────────────────────────────
 
     def _build_gap_analysis(
-        self, elements: list[InformationElement], question: str
+        self, elements: list[InformationElement], weights: list[int]
     ) -> GapAnalysis:
         critical_gaps = [
             e.element for e in elements
@@ -708,11 +1122,15 @@ class AnswerCoverageEngine:
             e.element for e in elements
             if e.coverage_quality in ("Partial", "Proxy")
         ]
+        proxy_critical = [
+            e.element for e, w in zip(elements, weights, strict=True)
+            if w == 2 and e.coverage_quality == "Proxy"
+        ]
 
         root_causes: list[str] = []
         if critical_gaps:
             root_causes.append(
-                "Some information elements have never been collected or are not publicly released"
+                "Some information elements are not in any SSA dataset on Data.gov (see the search evidence for each critical gap)"
             )
         if partial_gaps:
             root_causes.append(
@@ -720,7 +1138,13 @@ class AnswerCoverageEngine:
                 "sub-national detail, or timely update frequency"
             )
 
-        if not critical_gaps:
+        if not critical_gaps and proxy_critical:
+            impact = (
+                "The question can only be partly answered from public data. These critical "
+                "elements rely on indirect, one-time or discontinued data: "
+                f"{', '.join(proxy_critical[:3])}."
+            )
+        elif not critical_gaps:
             impact = (
                 "The question can be substantially addressed using existing public data, "
                 "though some aspects rely on aggregates rather than granular records."
@@ -743,6 +1167,7 @@ class AnswerCoverageEngine:
             partial_gaps=partial_gaps,
             root_causes=root_causes,
             impact_on_answer=impact,
+            gap_evidence={g: _evidence_note(g) for g in critical_gaps if _evidence_note(g)},
         )
 
     # ── Main evaluate ──────────────────────────────────────────────────────────
@@ -764,8 +1189,9 @@ class AnswerCoverageEngine:
         # 3. Keyword-match the question
         matched = self._match_entries(question)
 
-        # 4. Merge (intent seeds first, so they appear at the top)
-        all_matched = self._merge_entries(seeded, matched)
+        # 4. Merge (intent seeds first, so they appear at the top), then let specific
+        #    elements demote the broader ones they refine.
+        all_matched = self._apply_refinements(self._merge_entries(seeded, matched))
 
         # If nothing matched at all (no intent seed, no keyword hit), return Unsupported
         if not all_matched:
@@ -798,26 +1224,43 @@ class AnswerCoverageEngine:
         elements = self._build_elements(all_matched)
         weights = [w for _, w in all_matched]
 
+        # No intent category matched, but the question maps to known information
+        # elements: describe it generically so the scope and data needs are shown.
+        if intent is None:
+            intent = IntentAnalysis(
+                primary_intent="Determine whether SSA public data can answer this question",
+                intent_category="General",
+                required_data_types=[el.element for el in elements],
+                scope=detect_scope(normalise_question(question)) or "National",
+            )
+
         score = _compute_weighted_score(elements, weights)
+        score, rating_note = _apply_critical_cap(score, elements, weights)
         rating = score_to_coverage_rating(score)
 
         # 6. Available vs. missing
         missing_information: list[str] = []
         all_dataset_ids: set[str] = set()
 
-        for el in elements:
+        for el, w in zip(elements, weights, strict=True):
             if el.available:
                 all_dataset_ids.update(el.dataset_ids)
             else:
                 missing_information.append(el.element)
+            # A critical element with only indirect data is still missing for the
+            # purpose of answering the question, even though some data exists.
+            if el.available and w == 2 and el.coverage_quality == "Proxy":
+                missing_information.append(
+                    f"{el.element} (only indirect, one-time or discontinued data)"
+                )
 
         # Collect context dataset IDs from matched intent entries.
         # These are catalog datasets that provide domain context for the question
         # even when they don't directly supply the missing metrics.
         context_dataset_ids: set[str] = set()
-        q_lower = question.lower()
+        variants = normalise_question(question)
         for intent_entry in _INTENT_KB:
-            if any(re.search(p, q_lower) for p in intent_entry.patterns):
+            if _intent_matches(intent_entry, variants):
                 context_dataset_ids.update(intent_entry.context_dataset_ids)
 
         # Merge: direct dataset IDs (from matched elements) take precedence;
@@ -826,22 +1269,28 @@ class AnswerCoverageEngine:
 
         # Build available_data as short dataset names, and available_data_with_urls
         # as [{name, url}] dicts for tabular rendering in the report.
-        from ..services.dataset_catalog_service import get_catalog_service  # local import avoids circular
+        from ..services.dataset_catalog_service import (
+            get_catalog_service,  # local import avoids circular
+        )
         available_data_with_sources: list[str] = []
-        available_data_with_urls: list[dict] = []
+        available_data_with_urls: list[dict[str, str]] = []
         context_note: str = ""
         try:
             catalog = get_catalog_service()
-            all_ds = catalog.list_datasets()
+            all_ds = catalog.list_datasets(include_live=False)
             id_to_name = {ds.dataset_id: ds.name for ds in all_ds}
             id_to_url = {ds.dataset_id: ds.url for ds in all_ds}
+            id_to_provenance = {ds.dataset_id: ds.provenance for ds in all_ds}
             seen: set[str] = set()
             for did in sorted(display_dataset_ids):
                 name = id_to_name.get(did, did)
                 if name not in seen:
                     available_data_with_sources.append(name)
-                    url = id_to_url.get(did, "")
-                    available_data_with_urls.append({"name": name, "url": url})
+                    available_data_with_urls.append({
+                        "name": name,
+                        "url": id_to_url.get(did, ""),
+                        "provenance": id_to_provenance.get(did, ""),
+                    })
                     seen.add(name)
 
             # Add a context note when available datasets are contextual only
@@ -857,7 +1306,7 @@ class AnswerCoverageEngine:
             available_data_with_urls = [{"name": did, "url": ""} for did in sorted(display_dataset_ids)]
 
         # 7. Gap analysis and recommendations — both sourced from RecommendationService
-        gap_analysis = self._build_gap_analysis(elements, question)
+        gap_analysis = self._build_gap_analysis(elements, weights)
         structured_recs: list[Recommendation] = _recommendation_service.for_gaps(elements)
         plain_recs = [r.title for r in structured_recs]
 
@@ -887,7 +1336,7 @@ class AnswerCoverageEngine:
                 "disability service accessibility. Stakeholders could identify which communities "
                 "face the longest waits and furthest travel, evaluate whether staffing matches "
                 "local demand, and build an evidence-based case for resource allocation and "
-                "office expansion. No other combination of currently published data achieves this."
+                "office expansion."
             )
         elif intent_category in ("accessibility", "geographic equity", "access"):
             potential_impact = (
@@ -940,6 +1389,7 @@ class AnswerCoverageEngine:
             transparency_recommendations=plain_recs,
             potential_impact=potential_impact,
             datasets_consulted=sorted(all_dataset_ids),
+            rating_note=rating_note,
         )
 
 

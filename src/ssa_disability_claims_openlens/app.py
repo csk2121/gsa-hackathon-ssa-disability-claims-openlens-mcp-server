@@ -12,17 +12,6 @@ from fastmcp import FastMCP
 
 from .config import get_settings
 
-# ── Import all tool registration functions ─────────────────────────────────────
-from .tools import (
-    analyze_dataset_completeness,
-    assess_dataset_freshness,
-    compare_datasets,
-    discover_disability_datasets,
-    evaluate_answer_coverage,
-    explain_dataset,
-    recommend_transparency_improvements,
-)
-
 # ── Import all prompt registration functions ───────────────────────────────────
 from .prompts import (
     answer_coverage_evaluator,
@@ -38,6 +27,16 @@ from .resources import (
     transparency_recommendations,
 )
 
+# ── Import all tool registration functions ─────────────────────────────────────
+from .tools import (
+    analyze_dataset_completeness,
+    assess_dataset_freshness,
+    compare_datasets,
+    discover_disability_datasets,
+    evaluate_answer_coverage,
+    explain_dataset,
+    recommend_transparency_improvements,
+)
 from .utils import get_logger
 
 logger = get_logger(__name__)

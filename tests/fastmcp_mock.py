@@ -4,7 +4,8 @@ Mock for fastmcp — allows tests to run in environments where fastmcp is not in
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 class FastMCP:

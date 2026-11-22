@@ -7,14 +7,14 @@ Utilities are intentionally side-effect free and independently testable.
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
-from typing import Any, Optional
+from datetime import date
+from typing import Any
 
+from rich.console import Console
 from rich.logging import RichHandler
 
 from .config import get_settings
 from .models import CoverageRating, FreshnessStatus, UpdateFrequency
-
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 
@@ -32,7 +32,7 @@ def get_logger(name: str) -> logging.Logger:
         level=level,
         format="%(message)s",
         datefmt="[%X]",
-        handlers=[RichHandler(rich_tracebacks=True, markup=True)],
+        handlers=[RichHandler(rich_tracebacks=True, markup=True, console=Console(stderr=True))],
     )
     logger = logging.getLogger(name)
     logger.setLevel(level)
@@ -56,14 +56,14 @@ def score_to_coverage_rating(score: float) -> CoverageRating:
     return CoverageRating.UNSUPPORTED
 
 
-def days_since(d: Optional[date]) -> Optional[int]:
+def days_since(d: date | None) -> int | None:
     """Return the number of calendar days since a given date, or None."""
     if d is None:
         return None
     return (date.today() - d).days
 
 
-def frequency_to_expected_days(freq: UpdateFrequency) -> Optional[int]:
+def frequency_to_expected_days(freq: UpdateFrequency) -> int | None:
     """Return the expected maximum days between updates for a given frequency."""
     mapping: dict[UpdateFrequency, int] = {
         UpdateFrequency.REAL_TIME: 1,
@@ -78,7 +78,7 @@ def frequency_to_expected_days(freq: UpdateFrequency) -> Optional[int]:
 
 
 def compute_freshness_score(
-    last_updated: Optional[date], frequency: UpdateFrequency
+    last_updated: date | None, frequency: UpdateFrequency
 ) -> tuple[float, FreshnessStatus, list[str]]:
     """
     Compute a 0–100 freshness score and qualitative status.

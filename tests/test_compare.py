@@ -16,20 +16,20 @@ import pytest
 
 from src.ssa_disability_claims_openlens.models import CompareDatasetsInput
 from src.ssa_disability_claims_openlens.tools.compare_datasets import (
-    _SHARED_DIMS,
-    _MISSING_RELS,
     _INTEGRATION_OPPS,
+    _MISSING_RELS,
+    _SHARED_DIMS,
 )
 
 
 class TestCompareDatasets:
     def test_input_requires_two_datasets(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             CompareDatasetsInput(dataset_ids=["only-one"])
 
     def test_input_rejects_duplicates(self) -> None:
         with pytest.raises(ValueError, match="unique"):
-            CompareDatasetsInput(dataset_ids=["ssa-odar-pending-cases", "ssa-odar-pending-cases"])
+            CompareDatasetsInput(dataset_ids=["ssa-hearing-office-workload", "ssa-hearing-office-workload"])
 
     def test_shared_dims_kb_populated(self) -> None:
         assert len(_SHARED_DIMS) >= 5, "Expected at least 5 shared dimension entries"
