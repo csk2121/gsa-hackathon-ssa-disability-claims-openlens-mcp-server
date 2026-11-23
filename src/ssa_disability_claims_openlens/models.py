@@ -343,10 +343,17 @@ class GapAnalysis(BaseModel):
     """Structured gap analysis for a question."""
 
     critical_gaps: list[str] = Field(
-        description="Missing information that prevents answering the question"
+        description=(
+            "Information not published in any SSA dataset (rated None). The name is kept "
+            "for compatibility: whether the question depends on it most is in critical_elements."
+        )
     )
     partial_gaps: list[str] = Field(
-        description="Information available but incomplete or indirect"
+        description="Information available but incomplete or indirect (rated Partial or Proxy)"
+    )
+    critical_elements: list[str] = Field(
+        default_factory=list,
+        description="Elements the question cannot be answered without (weighted double)",
     )
     root_causes: list[str] = Field(
         description="Why the gaps exist (e.g., not collected, not published)"
@@ -372,6 +379,10 @@ class Recommendation(BaseModel):
 
     title: str = Field(description="Short action title for the recommendation")
     closes_gap: str = Field(description="The missing information element this recommendation addresses")
+    also_closes: list[str] = Field(
+        default_factory=list,
+        description="Other information elements the same publication would also close",
+    )
     category: str = Field(
         description=(
             "Recommendation category: Operational Metrics | Demographic Data | "
@@ -381,6 +392,10 @@ class Recommendation(BaseModel):
     )
     justification: str = Field(description="Why publishing this data would improve public understanding")
     priority: RecommendationPriority = Field(description="High | Medium | Low")
+    priority_reason: str = Field(
+        default="",
+        description="Why it has this priority: how much the question depends on the gap it closes",
+    )
     affected_datasets: list[str] = Field(
         default_factory=list,
         description="Existing dataset IDs this recommendation would extend or complement",
@@ -464,31 +479,6 @@ class AnswerCoverageAssessment(BaseModel):
     def round_score(cls, v: float) -> float:
         return round(v, 1)
 
-    def _confidence_label(self) -> str:
-        """
-        Derive an Assessment Confidence label from the coverage rating and
-        evidence quality.
-
-        This measures the engine's certainty about its own analysis — not how
-        much data SSA has published (that is what Answer Coverage captures).
-
-        Low    — No relevant datasets found (Unsupported). The engine could not
-                 map the question to any known SSA domain.
-        Medium — Limited coverage AND no direct element-matched datasets found;
-                 analysis rests entirely on context datasets with no partial
-                 or proxy coverage. The engine identified the domain but has
-                 weak grounding.
-        High   — Intent identified, missing information enumerated, and
-                 recommendations generated (even if coverage is Limited).
-                 The engine produced a fully grounded analysis — the
-                 uncertainty is in the missing data, not in the assessment.
-        """
-        if self.coverage_rating == CoverageRating.UNSUPPORTED:
-            return "Low"
-        if self.coverage_rating == CoverageRating.LIMITED and not self.datasets_consulted:
-            return "Medium"
-        return "High"
-
     def format_report(self) -> str:
         """
         Return a human-readable OpenLens Assessment report.
@@ -524,11 +514,6 @@ class AnswerCoverageAssessment(BaseModel):
             "## Answer Coverage",
             "",
             f"**{self.coverage_rating.value}**",
-            "",
-            *([f"_{self.rating_note}_", ""] if self.rating_note else []),
-            "## Assessment Confidence",
-            "",
-            f"**{self._confidence_label()}**",
             "",
             "## Available Data",
             "",
@@ -566,20 +551,28 @@ class AnswerCoverageAssessment(BaseModel):
             "## Gap Analysis",
             "",
         ]
+        critical = set(self.gap_analysis.critical_elements)
+
+        def _gap_line(g: str) -> str:
+            return f"- {g} (critical)" if g in critical else f"- {g}"
+
         if self.gap_analysis.critical_gaps:
-            lines.append("**Critical gaps** (data not publicly available):")
+            lines.append("**Not published** (no SSA dataset on Data.gov provides it):")
             lines.append("")
             for g in self.gap_analysis.critical_gaps:
-                lines.append(f"- {g}")
+                lines.append(_gap_line(g))
                 evidence = self.gap_analysis.gap_evidence.get(g)
                 if evidence:
                     lines.append(f"  - *Checked:* {evidence}")
             lines.append("")
         if self.gap_analysis.partial_gaps:
-            lines.append("**Partial gaps** (data exists but incomplete):")
+            lines.append("**Only partly available** (published in part, or only indirectly):")
             lines.append("")
             for g in self.gap_analysis.partial_gaps:
-                lines.append(f"- {g}")
+                lines.append(_gap_line(g))
+            lines.append("")
+        if critical & set(self.gap_analysis.critical_gaps + self.gap_analysis.partial_gaps):
+            lines.append("_(critical): the question cannot be answered without this information._")
             lines.append("")
         lines.append(f"**Impact**: {self.gap_analysis.impact_on_answer}")
 
@@ -587,7 +580,7 @@ class AnswerCoverageAssessment(BaseModel):
         if self.required_information_elements:
             lines += [
                 "",
-                "## How Each Element Was Rated",
+                "## How Answer Coverage Was Rated",
                 "",
                 "| Information needed | Rating | Why |",
                 "|--------------------|--------|-----|",
@@ -601,6 +594,8 @@ class AnswerCoverageAssessment(BaseModel):
                 "level, breakdown or period. Proxy: only indirect, one-time or discontinued data. "
                 "None: no SSA dataset found (searches recorded)._",
             ]
+            if self.rating_note:
+                lines += ["", f"**Why {self.coverage_rating.value}**: {self.rating_note}"]
 
         # Structured recommendations grouped by category, numbered globally
         if self.structured_recommendations:

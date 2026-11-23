@@ -221,3 +221,9 @@ __marimo__/
 
 .bob/
 .vscode/
+
+# Claude Code personal settings
+.claude/settings.local.json
+
+# Agent evaluation: the MCP server's own log from each run
+eval/results/agent/server.log

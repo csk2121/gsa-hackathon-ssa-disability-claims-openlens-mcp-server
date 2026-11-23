@@ -142,7 +142,11 @@ _COVERAGE_KB: list[_CoverageEntry] = [
     # ── Processing / wait times ────────────────────────────────────────────────
     _CoverageEntry(
         patterns=[r"wait\s*(time|period)", r"processing\s*time", r"how\s*long",
-                  r"days?\s*(to|for)\s*(decide|decision|process)", r"backlog"],
+                  r"days?\s*(to|for)\s*(decide|decision|process)", r"backlog",
+                  # "number of days an initial decision takes", "how many months to a decision"
+                  r"\b(days?|weeks?|months?)\b[^.?!]{0,40}\b(decision|decide|process)",
+                  r"how\s*many\s*(days|weeks|months)",
+                  r"\b(decision|claim)s?\b[^.?!]{0,30}\btakes?\b"],
         exclude_patterns=[r"appointment"],
         element="Disability claim processing times",
         description="Average or distribution of days from application to decision",
@@ -172,13 +176,16 @@ _COVERAGE_KB: list[_CoverageEntry] = [
             "ssa-initial-disability-processing-time",
             "ssa-state-agency-workload-data",
             "ssa-hearing-office-workload",
+            "ssa-field-office-claims-pending",
         ],
         coverage_quality="Proxy",
         rationale=(
             "No dataset reports decision times per field office or per DDS. Initial-claim times "
             "are national averages (US-GOV-SSA-1409), state agency data has pending counts by "
-            "state but no times (US-GOV-SSA-307), and per-office times exist only for hearing "
-            "offices (US-GOV-SSA-303), which are not mapped to field offices."
+            "state but no times (US-GOV-SSA-307), field office claims pending is one national "
+            "count per year, all claim types combined, ending FY2022 (US-GOV-SSA-435), and "
+            "per-office times exist only for hearing offices (US-GOV-SSA-303), which are not "
+            "mapped to field offices."
         ),
         weight=2,
         refines=["Disability claim processing times"],
@@ -290,12 +297,17 @@ _COVERAGE_KB: list[_CoverageEntry] = [
         dataset_ids=[
             "ssa-field-office-visitor-counts-2016",
             "ssa-field-office-employee-counts-2016",
+            "ssa-title2-claim-receipts-by-field-office-2016",
             "ssa-field-office-visitors",
+            "ssa-field-office-claims-pending",
+            "ssa-field-office-telephone-service",
         ],
         coverage_quality="Proxy",
         rationale=(
-            "Per-office staffing and visitor counts exist for FY2016 only (FOIA releases "
-            "US-GOV-SSA-1917, -1918); there is no current per-office series."
+            "Per-office staffing, visitor and Title II disability claim receipt counts exist for "
+            "FY2016 only (FOIA releases US-GOV-SSA-1917, -1918, -1919). Current series — daily "
+            "visitors (US-GOV-SSA-434), claims pending (US-GOV-SSA-435) and phone answer and busy "
+            "rates (US-GOV-SSA-1414) — are national totals with no per-office figures."
         ),
         weight=2,
     ),
@@ -320,11 +332,16 @@ _COVERAGE_KB: list[_CoverageEntry] = [
                   r"demand.*office", r"office.*demand"],
         element="Office workload and capacity",
         description="Case volume relative to office processing capacity",
-        dataset_ids=["ssa-hearing-office-workload", "ssa-state-agency-workload-data"],
+        dataset_ids=[
+            "ssa-hearing-office-workload",
+            "ssa-state-agency-workload-data",
+            "ssa-title2-claim-receipts-by-field-office-2016",
+        ],
         coverage_quality="Proxy",
         rationale=(
             "Workload volumes are published for hearing offices (US-GOV-SSA-303) and state agencies "
-            "(US-GOV-SSA-307), but without staffing or capacity to relate them to."
+            "(US-GOV-SSA-307), but without staffing or capacity to relate them to. Field office "
+            "claim receipts and staffing can be paired only for FY2016 (US-GOV-SSA-1919, -1918)."
         ),
         weight=2,
     ),
@@ -939,7 +956,12 @@ _QUALITY_ORDER = ["None", "Proxy", "Partial", "Full"]
 def _apply_critical_cap(
     score: float, elements: list[InformationElement], weights: list[int]
 ) -> tuple[float, str]:
-    """Return (score, note) after applying the critical-element cap."""
+    """
+    Return (score, note) after applying the critical-element cap.
+
+    The note explains the capped rating in plain language for the report's
+    "How Answer Coverage Was Rated" section; it is empty when no cap applies.
+    """
     critical = [el for el, w in zip(elements, weights, strict=True) if w == 2]
     if not critical:
         return score, ""
@@ -947,9 +969,39 @@ def _apply_critical_cap(
     cap = _CRITICAL_CAP.get(best)
     if cap is None or score <= cap[0]:
         return score, ""
-    return cap[0], (
-        f"Rating capped at {cap[1]}: the best-covered critical element is rated {best}, "
-        "so better-covered supporting elements cannot raise the overall rating."
+    return cap[0], _cap_explanation(critical, best, cap[1], score_to_coverage_rating(score).value)
+
+
+_AVAILABILITY_PHRASE: dict[str, str] = {
+    "None": "not published at all (rated None)",
+    "Proxy": "only available indirectly (rated Proxy)",
+    "Partial": "only partly available (rated Partial)",
+}
+_COUNT_WORDS = {1: "one thing", 2: "two things", 3: "three things"}
+
+
+def _lower_first(text: str) -> str:
+    """Lowercase the first letter for use mid-sentence, leaving acronyms like 'SSA' alone."""
+    if len(text) > 1 and text[0].isupper() and text[1].islower():
+        return text[0].lower() + text[1:]
+    return text
+
+
+def _cap_explanation(
+    critical: list[InformationElement], best: str, capped: str, uncapped: str
+) -> str:
+    """Plain-language reason a question's rating was capped, for the report."""
+    names = [_lower_first(el.element) for el in critical]
+    listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+    count = _COUNT_WORDS.get(len(names), f"{len(names)} things")
+    verb = "is" if len(names) == 1 else "are"
+    # "at best" only when the critical items are not all rated the same.
+    hedge = "" if all(el.coverage_quality == best for el in critical) else "at best "
+    return (
+        f"The {count} this question needs most, {listed}, {verb} {hedge}"
+        f"{_AVAILABILITY_PHRASE[best]}. The rating can't be higher than that, so it is "
+        f"{capped}. The other information is better covered and would bring the average "
+        f"up to {uncapped}, but it can't make up for what's missing."
     )
 
 
@@ -988,12 +1040,23 @@ def _entry_matches(entry: _CoverageEntry, variants: tuple[str, str]) -> bool:
     return _matches(entry.patterns, variants) and not _matches(entry.exclude_patterns, variants)
 
 
+# A named state ("in Ohio") asks for state-level detail just as "by state" does.
+# Used for scope only: a state name alone does not make a question about SSA data.
+_US_STATES = (
+    "alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|"
+    "georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|"
+    "massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|"
+    "new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|"
+    "oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|"
+    "vermont|virginia|washington|west virginia|wisconsin|wyoming|district of columbia|puerto rico"
+)
+
 _SCOPE_RULES: list[tuple[str, str]] = [
     (r"hearing\s*office|\balj\b|\bjudge", "Hearing office level"),
     (r"field\s*office", "Field office level"),
     (r"\bzip\b|census\s*tract", "ZIP / sub-county level"),
     (r"\bcounty\b|\blocal\b|\brural\b|\burban\b|\bcommunity\b", "County level"),
-    (r"\bstate\b", "State level"),
+    (rf"\bstate\b|\b(?:{_US_STATES})\b", "State level"),
     (r"\bregion", "Regional level"),
 ]
 
@@ -1114,60 +1177,86 @@ class AnswerCoverageEngine:
     def _build_gap_analysis(
         self, elements: list[InformationElement], weights: list[int]
     ) -> GapAnalysis:
-        critical_gaps = [
+        # "Critical" means weight 2 (the question cannot be answered without it),
+        # the same meaning the framework and the cap use. Whether an element is
+        # published is a separate question: an unpublished element can be supporting.
+        critical = {e.element for e, w in zip(elements, weights, strict=True) if w == 2}
+        not_published = [
             e.element for e in elements
             if not e.available and e.coverage_quality == "None"
         ]
-        partial_gaps = [
+        partly_available = [
             e.element for e in elements
             if e.coverage_quality in ("Partial", "Proxy")
         ]
+        critical_missing = [g for g in not_published if g in critical]
+        supporting_missing = [g for g in not_published if g not in critical]
         proxy_critical = [
             e.element for e, w in zip(elements, weights, strict=True)
             if w == 2 and e.coverage_quality == "Proxy"
         ]
+        # The rating is capped by the BEST critical element (see _apply_critical_cap),
+        # so the impact statement follows the same rule.
+        usable_critical = [
+            e.element for e, w in zip(elements, weights, strict=True)
+            if w == 2 and e.coverage_quality in ("Full", "Partial")
+        ]
 
         root_causes: list[str] = []
-        if critical_gaps:
+        if not_published:
             root_causes.append(
-                "Some information elements are not in any SSA dataset on Data.gov (see the search evidence for each critical gap)"
+                "Some information is not in any SSA dataset on Data.gov (see the search "
+                "evidence under each item that is not published)"
             )
-        if partial_gaps:
+        if partly_available:
             root_causes.append(
                 "Several relevant datasets exist but lack demographic disaggregation, "
                 "sub-national detail, or timely update frequency"
             )
 
-        if not critical_gaps and proxy_critical:
+        also_missing = (
+            f" Supporting information is also not published: {', '.join(supporting_missing[:3])}."
+            if supporting_missing else ""
+        )
+        if critical_missing and not usable_critical:
             impact = (
-                "The question can only be partly answered from public data. These critical "
-                "elements rely on indirect, one-time or discontinued data: "
-                f"{', '.join(proxy_critical[:3])}."
+                "The question cannot be reliably answered from public data. Information it "
+                f"depends on most is not published: {', '.join(critical_missing[:3])}."
+                + also_missing
             )
-        elif not critical_gaps:
+        elif critical_missing:
+            impact = (
+                "The question can only be partly answered from public data. Some information "
+                f"it depends on most is not published: {', '.join(critical_missing[:3])}. "
+                f"Other critical information is at least partly available "
+                f"({', '.join(usable_critical[:3])}), so part of the answer is possible."
+                + also_missing
+            )
+        elif proxy_critical:
+            impact = (
+                "The question can only be partly answered from public data. Information it "
+                "depends on most is only available indirectly (one-time, historical or "
+                f"discontinued data): {', '.join(proxy_critical[:3])}." + also_missing
+            )
+        elif supporting_missing:
+            impact = (
+                "The question can be partly answered from public data. Supporting "
+                f"information is not published: {', '.join(supporting_missing[:3])}. "
+                "Without it the answer will be incomplete."
+            )
+        else:
             impact = (
                 "The question can be substantially addressed using existing public data, "
                 "though some aspects rely on aggregates rather than granular records."
             )
-        elif len(critical_gaps) >= len(elements) // 2:
-            impact = (
-                "The question cannot be reliably answered from public data alone. "
-                f"Critical missing elements — {', '.join(critical_gaps[:3])} — "
-                "require data that SSA has not published."
-            )
-        else:
-            impact = (
-                f"The question can be partially addressed. The critical gap is: "
-                f"{critical_gaps[0]}. "
-                "Without this data, any analysis will be incomplete or rely on proxies."
-            )
 
         return GapAnalysis(
-            critical_gaps=critical_gaps,
-            partial_gaps=partial_gaps,
+            critical_gaps=not_published,
+            partial_gaps=partly_available,
+            critical_elements=[e.element for e in elements if e.element in critical],
             root_causes=root_causes,
             impact_on_answer=impact,
-            gap_evidence={g: _evidence_note(g) for g in critical_gaps if _evidence_note(g)},
+            gap_evidence={g: _evidence_note(g) for g in not_published if _evidence_note(g)},
         )
 
     # ── Main evaluate ──────────────────────────────────────────────────────────
@@ -1307,7 +1396,9 @@ class AnswerCoverageEngine:
 
         # 7. Gap analysis and recommendations — both sourced from RecommendationService
         gap_analysis = self._build_gap_analysis(elements, weights)
-        structured_recs: list[Recommendation] = _recommendation_service.for_gaps(elements)
+        structured_recs: list[Recommendation] = _recommendation_service.for_gaps(
+            elements, weights=weights
+        )
         plain_recs = [r.title for r in structured_recs]
 
         # 8. Floor rule: Unsupported → Limited when domain context was found.

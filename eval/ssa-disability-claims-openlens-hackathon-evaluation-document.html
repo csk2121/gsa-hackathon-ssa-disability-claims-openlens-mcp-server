@@ -89,7 +89,7 @@
   </table>
 
   
-  <h2>4. Dataset Catalog (21 datasets)</h2>
+  <h2>4. Dataset Catalog (24 datasets)</h2>
   <p class="section-note">Names, links, dates, frequencies and coverage periods come from each dataset's official Data.gov record (snapshot written by <code>scripts/sync_catalog.py</code>); only analyst notes are hand-written. Tests fail if the server can show a URL that is not in a source record.</p>
   <table>
     <tr><th>Dataset ID</th><th>Name</th><th>Data.gov record</th><th>Frequency</th><th>Geographic Coverage</th><th>Temporal</th></tr>
@@ -111,6 +111,9 @@
     <tr><td><code>ssa-field-office-employee-counts-2016</code></td><td>2016 Field Office Employee Counts</td><td>US-GOV-SSA-1918</td><td>Unknown</td><td>Each field office (per dataset title)</td><td>2015–2016</td></tr>
     <tr><td><code>ssa-field-office-visitor-counts-2016</code></td><td>2016 Field Office Visitor Counts</td><td>US-GOV-SSA-1917</td><td>Unknown</td><td>Field offices (per dataset title)</td><td>2015–2016</td></tr>
     <tr><td><code>ssa-field-office-appointments-21-days</code></td><td>Percentage of Field Office Claims Appointments Scheduled Within 21 Days - FY 2005-2015</td><td>US-GOV-SSA-431</td><td>Monthly</td><td>Not stated in the source record</td><td>2004–2015</td></tr>
+    <tr><td><code>ssa-field-office-claims-pending</code></td><td>Field Office Claims Pending</td><td>US-GOV-SSA-435</td><td>Annually</td><td>National only</td><td>2005–2022</td></tr>
+    <tr><td><code>ssa-field-office-telephone-service</code></td><td>Field Office Telephone Service - Monthly National Answer Rate and Busy Rate</td><td>US-GOV-SSA-1414</td><td>Monthly</td><td>National only</td><td>2012 onward (per Data.gov record; end date not stated)</td></tr>
+    <tr><td><code>ssa-title2-claim-receipts-by-field-office-2016</code></td><td>2016 Title 2 Claim Receipts by Field Office</td><td>US-GOV-SSA-1919</td><td>Unknown</td><td>Each field office (per dataset title)</td><td>2015–2016</td></tr>
     <tr><td><code>ssa-di-ssi-participants-employment-2015</code></td><td>DI &amp; SSI Program Participants: Characteristics &amp; Employment, 2015</td><td>US-GOV-SSA-2278</td><td>Unknown</td><td>Not stated in the source record</td><td>2015–2015</td></tr>
     <tr><td><code>ssa-nscf</code></td><td>National Survey of SSI Children and Families (NSCF)</td><td>US-GOV-SSA-328</td><td>Irregular</td><td>Continental United States (excludes Alaska, Hawaii and territories)</td><td>Not stated in the Data.gov record</td></tr>
     <tr><td><code>ssa-red-book</code></td><td>Red Book: A Guide to Work Incentives</td><td>Manual check</td><td>Unknown</td><td>National (policy applies uniformly)</td><td>Not applicable (policy reference)</td></tr>
@@ -128,15 +131,6 @@
     <tr><td><span class="badge badge-partial">Partial</span></td><td>40–74</td><td>Relevant datasets support part of the analysis; some critical gaps</td></tr>
     <tr><td><span class="badge badge-proxy">Limited</span></td><td>15–39</td><td>Relevant datasets found but major gaps prevent a complete answer</td></tr>
     <tr><td><span class="badge badge-none">Unsupported</span></td><td>0–14</td><td>No relevant datasets found; question outside known SSA domain</td></tr>
-  </table>
-
-  <h3>Assessment Confidence</h3>
-  <table>
-    <tr><th>Condition</th><th>Confidence</th></tr>
-    <tr><td>No relevant datasets found (Unsupported)</td><td><span class="badge badge-none">Low</span></td></tr>
-    <tr><td>Limited coverage with no direct dataset matches (context-only)</td><td><span class="badge badge-partial">Medium</span></td></tr>
-    <tr><td>Intent identified + gaps enumerated + recommendations generated</td><td><span class="badge badge-high">High</span></td></tr>
-    <tr><td>Partial, High, or Complete coverage</td><td><span class="badge badge-high">High</span></td></tr>
   </table>
 
   <h3>Intent Categories (8)</h3>
@@ -163,7 +157,7 @@
   <p class="section-note">Critical-element cap: a question cannot be rated higher than its best critical element allows (all critical elements Proxy/None → at most Limited; best Partial → at most Partial). Questions are matched in both their original and singularised forms; the scope comes from the question's own wording.</p>
 
   <h3>Coverage KB Elements (31)</h3>
-  <p class="section-note">Every element rated None is backed by recorded Data.gov searches (<code>data/gap_evidence.json</code>), re-run weekly by <code>scripts/check_gap_claims.py</code>; the report shows the evidence under each critical gap.</p>
+  <p class="section-note">Every element rated None is backed by recorded Data.gov searches (<code>data/gap_evidence.json</code>), re-run weekly by <code>scripts/check_gap_claims.py</code>; the report shows the evidence under each element that is not published.</p>
   <table>
     <tr><th>Element</th><th>Rating</th><th>Weight</th><th>Why (shown in every report)</th></tr>
     <tr><td>Disability claim processing times</td><td><span class="badge badge-partial">Partial</span></td><td>Critical (2)</td><td>Average processing times are published for initial claims (US-GOV-SSA-1409), reconsiderations (US-GOV-SSA-1768) and hearings (US-GOV-SSA-303, -304), but only as averages, with no state breakdown described for initial claims.</td></tr>
@@ -173,9 +167,9 @@
     <tr><td>Field office appointment wait times</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td><td>Only a discontinued series exists: the share of claims appointments scheduled within 21 days, FY2005–2015 (US-GOV-SSA-431). No current or per-office wait times.</td></tr>
     <tr><td>Geographic disaggregation of outcomes</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td><td>Claims and allowances are published by state (US-GOV-SSA-307, -308) and beneficiaries by state and county (US-GOV-SSA-3378, -3414); claim outcomes stop at state level.</td></tr>
     <tr><td>SSA field office locations and coverage</td><td><span class="badge badge-full">Full</span></td><td>Supporting (1)</td><td>Locations, phone numbers and hours of every field office are published and updated quarterly (US-GOV-SSA-1733).</td></tr>
-    <tr><td>Field office operational metrics (staffing, volume, wait times)</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td><td>Per-office staffing and visitor counts exist for FY2016 only (FOIA releases US-GOV-SSA-1917, -1918); there is no current per-office series.</td></tr>
+    <tr><td>Field office operational metrics (staffing, volume, wait times)</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td><td>Per-office staffing, visitor and Title II disability claim receipt counts exist for FY2016 only (FOIA releases US-GOV-SSA-1917, -1918, -1919). Current series — daily visitors (US-GOV-SSA-434), claims pending (US-GOV-SSA-435) and phone answer and busy rates (US-GOV-SSA-1414) — are national totals with no per-office figures.</td></tr>
     <tr><td>SSA office staffing levels</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td><td>Field office employee counts were released once, for FY2016 (US-GOV-SSA-1918); no hearing office staffing data is in the catalog.</td></tr>
-    <tr><td>Office workload and capacity</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td><td>Workload volumes are published for hearing offices (US-GOV-SSA-303) and state agencies (US-GOV-SSA-307), but without staffing or capacity to relate them to.</td></tr>
+    <tr><td>Office workload and capacity</td><td><span class="badge badge-proxy">Proxy</span></td><td>Critical (2)</td><td>Workload volumes are published for hearing offices (US-GOV-SSA-303) and state agencies (US-GOV-SSA-307), but without staffing or capacity to relate them to. Field office claim receipts and staffing can be paired only for FY2016 (US-GOV-SSA-1919, -1918).</td></tr>
     <tr><td>Applicant age distribution</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td><td>The SSDI Annual Statistical Report gives demographic statistics on beneficiaries (US-GOV-SSA-1667); applicant age is not in the claim-level datasets.</td></tr>
     <tr><td>Gender disaggregation</td><td><span class="badge badge-partial">Partial</span></td><td>Supporting (1)</td><td>Beneficiary demographics are in the SSDI Annual Statistical Report (US-GOV-SSA-1667); no claim-level dataset is described with a sex breakdown.</td></tr>
     <tr><td>Race and ethnicity data</td><td><span class="badge badge-none">None</span></td><td>Critical (2)</td><td>No SSA dataset on Data.gov reports race or ethnicity (see search evidence).</td></tr>

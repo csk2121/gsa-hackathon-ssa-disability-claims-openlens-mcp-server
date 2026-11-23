@@ -11,6 +11,7 @@ import json
 from typing import Any
 
 from fastmcp import FastMCP
+from fastmcp.exceptions import ResourceError
 
 from ..services.recommendation_service import RecommendationService
 from ..utils import get_logger
@@ -59,6 +60,7 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
                 },
                 indent=2,
             )
-        except Exception as exc:  # noqa: BLE001
-            logger.error(f"transparency_recommendations resource failed: {exc}")
-            return json.dumps({"error": str(exc)})
+        except Exception:
+            # Full details stay in the server log; the client gets a generic message.
+            logger.exception("transparency_recommendations resource failed")
+            raise ResourceError("transparency_recommendations could not be loaded.") from None

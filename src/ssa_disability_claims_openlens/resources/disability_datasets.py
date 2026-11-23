@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 
 from fastmcp import FastMCP
+from fastmcp.exceptions import ResourceError
 
 from ..services.dataset_catalog_service import get_catalog_service
 from ..utils import get_logger
@@ -36,6 +37,7 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
                 [ds.model_dump(mode="json") for ds in datasets],
                 indent=2,
             )
-        except Exception as exc:  # noqa: BLE001
-            logger.error(f"disability_datasets resource failed: {exc}")
-            return json.dumps({"error": str(exc)})
+        except Exception:
+            # Full details stay in the server log; the client gets a generic message.
+            logger.exception("disability_datasets resource failed")
+            raise ResourceError("disability_datasets could not be loaded.") from None

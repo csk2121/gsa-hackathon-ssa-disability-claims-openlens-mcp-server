@@ -57,6 +57,9 @@ def create_app() -> FastMCP:
     mcp = FastMCP(
         name=settings.server_name,
         version=settings.server_version,
+        # Backstop: if any handler raises something other than ToolError or
+        # ResourceError, send the client a generic message, not the exception text.
+        mask_error_details=True,
         instructions=(
             "SSA Disability Claims OpenLens is an MCP Dataset Access Server that enables "
             "AI agents to discover, understand, compare, and evaluate SSA public datasets. "

@@ -55,10 +55,6 @@ Answer Coverage
 ---------------
 **Limited**
 
-Assessment Confidence
----------------------
-**Medium**
-
 Available Data
 --------------
 | Sl.# | Data | Web Link | Source Record |
@@ -78,14 +74,15 @@ Missing Information
 
 Gap Analysis
 ------------
-**Critical gaps** (data not publicly available):
-- Field office operational metrics (staffing, volume, wait times)
+**Only partly available** (published in part, or only indirectly):
+- Field office operational metrics (staffing, volume, wait times) (critical)
+- Field office appointment and walk-in volume (critical)
+- SSA office staffing levels (critical)
 
-**Partial gaps** (data exists but incomplete):
-- Office workload and capacity
+_(critical): the question cannot be answered without this information._
 
-**Impact**: The question cannot be reliably answered from public data alone.
-Critical missing elements require data that SSA has not published.
+**Impact**: The question can only be partly answered from public data. Information it
+depends on most is only available indirectly (one-time, historical or discontinued data).
 
 Transparency Recommendations
 ----------------------------
@@ -335,9 +332,40 @@ pytest tests/ -v
 
 ### Run evaluations
 
+Two levels, both written up in [docs/evaluation_results.md](docs/evaluation_results.md):
+
 ```bash
-python eval/phoenix_evals.py
+# 1. Engine benchmark: the Answer Coverage engine alone. Free, deterministic, CI-friendly.
+python eval/engine_benchmark.py
+
+# 2. Agent evaluation: a Claude agent answers the 12-question openlens-eval-0 test set
+#    through the real MCP server over stdio, scored by code checks and LLM judges.
+python -m eval.agent_eval.run --check-setup    # server and dataset; no model calls
+python -m eval.agent_eval.run --prompt v01     # an experiment
+python -m eval.agent_eval.run --prompt v02     # compare a second system prompt
 ```
+
+By default the agent and judges run as headless Claude Code (`claude -p`) on the
+Claude subscription the CLI is signed in with, so no API credit is needed. Each
+question gets a fresh session connected only to this MCP server, with no built-in
+tools. `--backend api` uses the Messages API instead (`pip install -e ".[eval]"`
+and `ANTHROPIC_API_KEY` in `.env`).
+
+Each experiment is saved to `eval/results/agent/<name>.json`, and
+`eval/results/agent/report.html` charts the experiments side by side:
+
+| Evaluator | Type | What it checks |
+|-----------|------|----------------|
+| Right tool | Code | The agent called the tool the question calls for |
+| Rating matches | Code | The stated coverage rating equals the expected one exactly |
+| Report shown in full | Code | The coverage report reached the user unaltered (95%+ of its lines) |
+| No invented numbers | Code | Every number in the answer came from a tool result |
+| Case expectations | Code | Phrases each case must, or must not, contain (e.g. the DDS premise note) |
+| Correctness | LLM judge | The answer agrees with the case's reference answer |
+| Grounding | LLM judge | Every factual claim is supported by the tool results, and stays in scope |
+
+The test set covers the demo questions plus out-of-scope, fabrication-bait and
+prompt-injection cases.
 
 ---
 
@@ -385,15 +413,16 @@ See [`.env.example`](.env.example) for all configuration options. The server run
 │       └── recommendation_service.py
 │
 ├── tests/                           # Pytest unit tests
-├── eval/                            # Evaluation benchmarks
-│   ├── phoenix_evals.py
+├── eval/                            # Evaluation
+│   ├── engine_benchmark.py          # engine-only benchmark
+│   ├── agent_eval/                  # Claude agent over MCP: dataset, agent, checks, judges, report
 │   └── benchmark_questions.yaml
 └── docs/                            # Documentation
 ```
 
 ---
 
-## Coverage Levels & Assessment Confidence
+## Coverage Levels & Freshness
 
 ### Answer Coverage Ratings
 
@@ -404,17 +433,6 @@ See [`.env.example`](.env.example) for all configuration options. The server run
 | Partial | Relevant datasets support part of the analysis; some critical gaps |
 | Limited | Relevant datasets found, but major gaps prevent a complete answer |
 | Unsupported | No relevant datasets found; question outside known SSA domain |
-
-### Assessment Confidence
-
-Measures how certain the engine is about the **quality of its own analysis** — not how much data SSA has published.
-
-| Condition | Assessment Confidence |
-|-----------|----------------------|
-| No relevant datasets found (Unsupported) | **Low** |
-| Limited coverage with no direct dataset matches (context-only) | **Medium** |
-| Intent identified + gaps enumerated + recommendations generated (any coverage rating) | **High** |
-| Partial, High, or Complete coverage | **High** |
 
 ### Freshness Statuses
 
@@ -449,6 +467,9 @@ Measures how certain the engine is about the **quality of its own analysis** —
 | 2016 Field Office Employee Counts | US-GOV-SSA-1918 | One-time |
 | 2016 Field Office Visitor Counts | US-GOV-SSA-1917 | One-time |
 | Field office claims appointments scheduled within 21 days, FY2005–2015 | US-GOV-SSA-431 | Discontinued |
+| Field Office Claims Pending (national, FY2006–2022) | US-GOV-SSA-435 | Annual |
+| Field Office Telephone Service (national answer and busy rates) | US-GOV-SSA-1414 | Monthly |
+| 2016 Title 2 Claim Receipts by Field Office | US-GOV-SSA-1919 | One-time |
 | DI & SSI Program Participants: Characteristics & Employment, 2015 | US-GOV-SSA-2278 | One-time |
 | National Survey of SSI Children and Families (2001–2002) | US-GOV-SSA-328 | One-time |
 | Red Book: A Guide to Work Incentives | none (manually checked link) | — |

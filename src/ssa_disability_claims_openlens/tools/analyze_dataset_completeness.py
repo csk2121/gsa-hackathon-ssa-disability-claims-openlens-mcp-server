@@ -15,6 +15,13 @@ from ..models import AnalyzeCompletenessInput
 from ..services.dataset_analysis_service import DatasetAnalysisService
 from ..services.dataset_catalog_service import get_catalog_service
 from ..utils import get_logger
+from ._common import (
+    READ_ONLY_CLOSED,
+    DatasetId,
+    FocusDimensions,
+    dataset_not_found,
+    tool_errors,
+)
 
 logger = get_logger(__name__)
 
@@ -32,27 +39,23 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             "using it for analysis, or to identify what data is missing from the catalog. "
             "Optionally focus on specific dimensions: 'geographic', 'temporal', 'operational'."
         ),
+        annotations=READ_ONLY_CLOSED,
     )
     def analyze_dataset_completeness(
-        dataset_id: str,
-        focus_dimensions: list[str] | None = None,
+        dataset_id: DatasetId,
+        focus_dimensions: FocusDimensions = None,
     ) -> dict[str, Any]:
         """Evaluate dataset coverage across geographic, temporal, and operational axes."""
-        try:
+        with tool_errors("analyze_dataset_completeness"):
             inp = AnalyzeCompletenessInput(
                 dataset_id=dataset_id,
-                focus_dimensions=focus_dimensions or [],
+                focus_dimensions=list(focus_dimensions or []),
             )
             catalog = get_catalog_service()
             detail = catalog.get_dataset_detail(inp.dataset_id)
 
             if detail is None:
-                return {
-                    "error": (
-                        f"Dataset '{inp.dataset_id}' not found. "
-                        "Use discover_disability_datasets to get valid dataset IDs."
-                    )
-                }
+                raise dataset_not_found(inp.dataset_id)
 
             analysis = _analysis_service.analyze_completeness(
                 detail, inp.focus_dimensions or None
@@ -62,6 +65,3 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
                 f"score={analysis.completeness_score}, rating={analysis.completeness_rating}"
             )
             return analysis.model_dump(mode="json")
-        except Exception as exc:  # noqa: BLE001
-            logger.error(f"analyze_dataset_completeness failed: {exc}")
-            return {"error": str(exc)}

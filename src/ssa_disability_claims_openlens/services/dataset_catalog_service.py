@@ -27,7 +27,9 @@ Architecture:
 from __future__ import annotations
 
 import json
+import re
 import time
+import unicodedata
 from abc import ABC, abstractmethod
 from datetime import date
 from functools import lru_cache
@@ -112,6 +114,29 @@ def _temporal_label(record: dict[str, Any]) -> str:
     if start:
         return f"{start[:4]} onward (per Data.gov record; end date not stated)"
     return "Not stated in the Data.gov record"
+
+
+# Data.gov slugs are lowercase letters, digits, hyphens and underscores. Live results
+# with any other slug are dropped, so every dataset_id the server hands out also
+# passes the tools' DatasetId validation.
+_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,119}$")
+
+def _clean_untrusted(value: Any, limit: int) -> str:
+    """
+    Normalise third-party text from live Data.gov results before it reaches the model.
+
+    The text is still untrusted. This replaces control and format characters
+    (Unicode categories Cc and Cf, which include zero-width characters and
+    bidirectional overrides that can hide text from a human reader), collapses
+    whitespace and caps the length, so a record cannot hide instructions or flood
+    the context. It does not make the content trustworthy.
+    """
+    if value is None:
+        return ""
+    raw = str(value)[: limit * 4]  # bound the work before scanning
+    visible = "".join(" " if unicodedata.category(ch) in ("Cc", "Cf") else ch for ch in raw)
+    text = " ".join(visible.split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -543,6 +568,68 @@ _CURATED_NOTES: dict[str, dict[str, Any]] = {
             "A threshold share, not an average wait time",
         ],
     },
+    "ssa-field-office-claims-pending": {
+        "tags": ["field office", "pending", "backlog", "claims", "workload"],
+        "purpose": (
+            "Yearly national count of all claims pending (in process, not yet adjudicated) in "
+            "SSA field offices, FY2006–2022. Covers retirement, survivor, disability and SSI claims."
+        ),
+        "geographic_coverage": "National only",
+        "frequency_if_unstated": UpdateFrequency.ANNUALLY,
+        "major_fields": [
+            DatasetField(name="fiscal_year", data_type="integer", description="Federal fiscal year (2006–2022)", is_key_field=True),
+            DatasetField(name="claims_pending", data_type="integer", description="All field office claims pending at year end"),
+        ],
+        "use_cases": [
+            "Track the national trend in field office claim backlogs",
+        ],
+        "limitations": [
+            "National total only — no per-office or per-state counts",
+            "All claim types combined (RSI, DI, SSI) — disability claims are not broken out",
+            "Pending counts only — no processing or wait times",
+            "Ends in FY2022",
+        ],
+    },
+    "ssa-field-office-telephone-service": {
+        "tags": ["field office", "telephone", "access", "answer rate", "busy rate", "service"],
+        "purpose": (
+            "Monthly national answer rate and busy rate for calls to SSA field offices, "
+            "fiscal years 2013 on."
+        ),
+        "geographic_coverage": "National only",
+        "major_fields": [
+            DatasetField(name="month", data_type="date", description="Reporting month", is_key_field=True),
+            DatasetField(name="answer_rate", data_type="float", description="Share of calls to field offices that were answered"),
+            DatasetField(name="busy_rate", data_type="float", description="Share of calls that received a busy signal"),
+        ],
+        "use_cases": [
+            "Track phone access to field offices over time",
+        ],
+        "limitations": [
+            "National only — no per-office figures",
+            "Excludes abandoned calls and calls that waited past the 15-minute maximum",
+            "Answer and busy rates, not call wait times",
+        ],
+    },
+    "ssa-title2-claim-receipts-by-field-office-2016": {
+        "tags": ["field office", "claims", "receipts", "SSDI", "workload", "demand"],
+        "purpose": "Number of Title II disability claims received by each SSA field office in FY2016 (FOIA release).",
+        "geographic_coverage": "Each field office (per dataset title)",
+        "prefer_download": True,
+        "major_fields": [
+            DatasetField(name="field_office", data_type="string", description="Field office", is_key_field=True),
+            DatasetField(name="title2_disability_receipts", data_type="integer", description="Title II disability claims received, FY2016 (includes 53rd week)"),
+        ],
+        "use_cases": [
+            "Historical baseline for disability claim volume by field office",
+            "Combine with FY2016 employee counts for a one-year claims-per-staff ratio",
+        ],
+        "limitations": [
+            "FY2016 only — one-time FOIA release, not an ongoing series",
+            "Title II (SSDI) only — SSI disability claims are not included",
+            "Claim receipts only — no pending counts or decision times",
+        ],
+    },
     "ssa-di-ssi-participants-employment-2015": {
         "tags": ["employment", "return to work", "work activity", "SSDI", "SSI", "chartbook"],
         "purpose": (
@@ -825,7 +912,7 @@ class DataGovAdapter(DatasetAdapter):
     def _summary_from_result(result: dict[str, Any]) -> DatasetSummary | None:
         slug = result.get("slug")
         dcat = result.get("dcat") or {}
-        if not slug or not dcat.get("title"):
+        if not isinstance(slug, str) or not _SLUG_RE.match(slug) or not dcat.get("title"):
             return None
         landing = dcat.get("landingPage")
         if isinstance(landing, dict):
@@ -837,15 +924,16 @@ class DataGovAdapter(DatasetAdapter):
                 if isinstance(candidate, str) and candidate.startswith("https://"):
                     url = candidate
                     break
-        identifier = dcat.get("identifier") or slug
+        identifier = _clean_untrusted(dcat.get("identifier"), 64) or slug
+        tags = [_clean_untrusted(k, 60) for k in (dcat.get("keyword") or []) if not str(k).isdigit()]
         return DatasetSummary(
             dataset_id=f"datagov-{slug}",
-            name=dcat["title"],
-            description=dcat.get("description") or "No description available.",
+            name=_clean_untrusted(dcat["title"], 300),
+            description=_clean_untrusted(dcat.get("description"), 2000) or "No description available.",
             source=DataSource.DATA_GOV,
             update_frequency=map_frequency(dcat.get("accrualPeriodicity")),
             url=url,
-            tags=[str(k) for k in (dcat.get("keyword") or []) if not str(k).isdigit()][:10],
+            tags=[t for t in tags if t][:10],
             last_updated=_parse_date(dcat.get("modified")),
             provenance=f"Data.gov record {identifier} (live search result)",
             source_record_url=f"https://catalog.data.gov/dataset/{slug}",

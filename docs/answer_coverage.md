@@ -62,7 +62,10 @@ match claim processing times.
 | **None** | 0.0 | No SSA dataset on Data.gov provides it — backed by recorded searches in `data/gap_evidence.json` |
 
 Every element carries a written rationale citing the Data.gov records behind its rating,
-and the report shows it in a **How Each Element Was Rated** table. Tests enforce the
+and the report shows it in a **How Answer Coverage Was Rated** table. When the
+critical-element cap (below) lowers the rating, that section ends with a **Why
+&lt;rating&gt;** line naming the critical elements and the rating the plain average would
+have given. Tests enforce the
 rubric: Full/Partial/Proxy elements must cite catalogued datasets, None elements must
 cite none and must have search evidence, and every rationale must cite a record id or
 the search evidence.
@@ -95,7 +98,7 @@ answerable. When the cap applies, the report says so under the rating.
 
 The score is mapped to a Coverage Rating. The report then lists the available datasets
 with their links and source records, the missing information, the gap analysis (with
-the search evidence under each critical gap), the per-element ratings and reasons,
+the search evidence under each element that is not published, and critical elements marked), the per-element ratings and reasons,
 recommendations linked to the gaps they close, and the potential impact.
 
 **Missing Information** lists every element rated None, and every critical element
@@ -125,16 +128,16 @@ This table is generated from the code (32 elements).
 | Information element | Rating | Weight | Why |
 |---------------------|--------|--------|-----|
 | Disability claim processing times | Partial | Critical | Average processing times are published for initial claims (US-GOV-SSA-1409), reconsiderations (US-GOV-SSA-1768) and hearings (US-GOV-SSA-303, -304), but only as averages, with no state breakdown described for initial claims. |
-| Disability decision times by field office or DDS | **Proxy** | Critical | No dataset reports decision times per field office or per DDS. Initial-claim times are national averages (US-GOV-SSA-1409), state agency data has pending counts by state but no times (US-GOV-SSA-307), and per-office times exist only for hearing offices (US-GOV-SSA-303), which are not mapped to field offices. |
+| Disability decision times by field office or DDS | **Proxy** | Critical | No dataset reports decision times per field office or per DDS. Initial-claim times are national averages (US-GOV-SSA-1409), state agency data has pending counts by state but no times (US-GOV-SSA-307), field office claims pending is one national count per year, all claim types combined, ending FY2022 (US-GOV-SSA-435), and per-office times exist only for hearing offices (US-GOV-SSA-303), which are not mapped to field offices. |
 | Hearing-level wait times | Partial | Critical | Average processing time per hearing office and average months to a hearing are published monthly (US-GOV-SSA-303, -304); no distributions. |
 | Linked claim history across decision levels | **Proxy** | Critical | Each decision level publishes its own counts and average times for different groups of claims (US-GOV-SSA-307, -299, -1409, -1768, -304). They cannot be linked to follow the same claims, so final rates and total waits can only be approximated. |
 | Field office appointment and walk-in volume | **Proxy** | Critical | Average daily visitors is published (US-GOV-SSA-434), but per-office visitor counts exist only for FY2016 (US-GOV-SSA-1917), and appointment volumes are not published. |
 | Field office appointment wait times | **Proxy** | Critical | Only a discontinued series exists: the share of claims appointments scheduled within 21 days, FY2005–2015 (US-GOV-SSA-431). No current or per-office wait times. |
 | Geographic disaggregation of outcomes | Partial | Supporting | Claims and allowances are published by state (US-GOV-SSA-307, -308) and beneficiaries by state and county (US-GOV-SSA-3378, -3414); claim outcomes stop at state level. |
 | SSA field office locations and coverage | Full | Supporting | Locations, phone numbers and hours of every field office are published and updated quarterly (US-GOV-SSA-1733). |
-| Field office operational metrics (staffing, volume, wait times) | **Proxy** | Critical | Per-office staffing and visitor counts exist for FY2016 only (FOIA releases US-GOV-SSA-1917, -1918); there is no current per-office series. |
+| Field office operational metrics (staffing, volume, wait times) | **Proxy** | Critical | Per-office staffing, visitor and Title II disability claim receipt counts exist for FY2016 only (FOIA releases US-GOV-SSA-1917, -1918, -1919). Current series — daily visitors (US-GOV-SSA-434), claims pending (US-GOV-SSA-435) and phone answer and busy rates (US-GOV-SSA-1414) — are national totals with no per-office figures. |
 | SSA office staffing levels | **Proxy** | Critical | Field office employee counts were released once, for FY2016 (US-GOV-SSA-1918); no hearing office staffing data is in the catalog. |
-| Office workload and capacity | **Proxy** | Critical | Workload volumes are published for hearing offices (US-GOV-SSA-303) and state agencies (US-GOV-SSA-307), but without staffing or capacity to relate them to. |
+| Office workload and capacity | **Proxy** | Critical | Workload volumes are published for hearing offices (US-GOV-SSA-303) and state agencies (US-GOV-SSA-307), but without staffing or capacity to relate them to. Field office claim receipts and staffing can be paired only for FY2016 (US-GOV-SSA-1919, -1918). |
 | Applicant age distribution | Partial | Supporting | The SSDI Annual Statistical Report gives demographic statistics on beneficiaries (US-GOV-SSA-1667); applicant age is not in the claim-level datasets. |
 | Gender disaggregation | Partial | Supporting | Beneficiary demographics are in the SSDI Annual Statistical Report (US-GOV-SSA-1667); no claim-level dataset is described with a sex breakdown. |
 | Race and ethnicity data | **None** | Critical | No SSA dataset on Data.gov reports race or ethnicity (see search evidence). |

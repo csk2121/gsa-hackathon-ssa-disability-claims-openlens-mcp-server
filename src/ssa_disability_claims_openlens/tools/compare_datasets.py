@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 
 from ..models import (
     CompareDatasetsInput,
@@ -20,6 +21,7 @@ from ..models import (
 )
 from ..services.dataset_catalog_service import get_catalog_service
 from ..utils import get_logger
+from ._common import READ_ONLY_CLOSED, DatasetIds, tool_errors
 
 logger = get_logger(__name__)
 
@@ -45,6 +47,8 @@ _SHARED_DIMS: dict[str, list[str]] = {
         "ssa-disability-claim-data",
         "ssa-state-agency-workload-data",
         "ssa-field-office-visitors",
+        "ssa-field-office-claims-pending",
+        "ssa-field-office-telephone-service",
     ],
     "program type (SSDI/SSI)": [
         "ssa-state-agency-workload-data",
@@ -61,6 +65,7 @@ _SHARED_DIMS: dict[str, list[str]] = {
         "ssa-disability-claim-data",
         "ssa-state-agency-workload-data",
         "ssa-hearing-office-workload",
+        "ssa-title2-claim-receipts-by-field-office-2016",
     ],
     "allowance / favorable determination counts": [
         "ssa-disability-claim-data",
@@ -82,6 +87,7 @@ _SHARED_DIMS: dict[str, list[str]] = {
         "ssa-field-office-locator",
         "ssa-field-office-visitor-counts-2016",
         "ssa-field-office-employee-counts-2016",
+        "ssa-title2-claim-receipts-by-field-office-2016",
     ],
 }
 
@@ -117,6 +123,12 @@ _MISSING_RELS: list[dict[str, object]] = [
         "description": "Cannot attribute visitor volume to individual field offices",
         "missing_field": "field office identifier (visitor data is not described per office)",
         "impact": "Cannot rank offices by in-person demand",
+    },
+    {
+        "datasets": {"ssa-field-office-locator", "ssa-field-office-claims-pending"},
+        "description": "Cannot attribute pending claims to individual field offices",
+        "missing_field": "field office identifier (claims pending is one national count per year)",
+        "impact": "Cannot see which field offices are building up claim backlogs",
     },
 ]
 
@@ -178,6 +190,15 @@ _INTEGRATION_OPPS: list[dict[str, object]] = [
         "expected_benefit": "A historical baseline for field office workload pressure",
     },
     {
+        "datasets": {"ssa-title2-claim-receipts-by-field-office-2016", "ssa-field-office-employee-counts-2016"},
+        "title": "FY2016 Disability Claims per Field Office Employee",
+        "description": (
+            "Both FY2016 releases are per field office, so Title II disability claim receipts "
+            "can be divided by employees to give a one-year claims-to-staff ratio."
+        ),
+        "expected_benefit": "A historical baseline for disability claim workload per office",
+    },
+    {
         "datasets": {"ssa-hearing-office-workload", "ssa-hearing-wait-time"},
         "title": "Hearing Backlog vs. Wait Time",
         "description": (
@@ -200,18 +221,11 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             "being left on the table due to missing linkages. "
             "Requires dataset_ids from discover_disability_datasets."
         ),
+        annotations=READ_ONLY_CLOSED,
     )
-    def compare_datasets(dataset_ids: list[str]) -> dict[str, Any]:
+    def compare_datasets(dataset_ids: DatasetIds) -> dict[str, Any]:
         """Compare multiple datasets for shared dimensions and integration opportunities."""
-        if len(dataset_ids) < 2:
-            return {
-                "error": (
-                    "compare_datasets requires at least two dataset IDs. "
-                    f"Received {len(dataset_ids)}. "
-                    "Use discover_disability_datasets to find valid dataset IDs."
-                )
-            }
-        try:
+        with tool_errors("compare_datasets"):
             inp = CompareDatasetsInput(dataset_ids=dataset_ids)
             catalog = get_catalog_service()
             id_set = set(inp.dataset_ids)
@@ -219,12 +233,10 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             # Validate all IDs exist
             missing = [did for did in inp.dataset_ids if catalog.get_dataset_detail(did) is None]
             if missing:
-                return {
-                    "error": (
-                        f"Dataset(s) not found: {', '.join(missing)}. "
-                        "Use discover_disability_datasets to get valid IDs."
-                    )
-                }
+                raise ToolError(
+                    f"Dataset(s) not found: {', '.join(missing)}. "
+                    "Use discover_disability_datasets to get valid IDs."
+                )
 
             # Find shared dimensions
             shared: list[SharedDimension] = []
@@ -282,6 +294,3 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             )
             logger.info(f"compare_datasets: compared {len(inp.dataset_ids)} datasets")
             return result.model_dump(mode="json")
-        except Exception as exc:  # noqa: BLE001
-            logger.error(f"compare_datasets failed: {exc}")
-            return {"error": str(exc)}

@@ -15,6 +15,7 @@ from ..models import AssessFreshnessInput
 from ..services.dataset_analysis_service import DatasetAnalysisService
 from ..services.dataset_catalog_service import get_catalog_service
 from ..utils import get_logger
+from ._common import READ_ONLY_CLOSED, DatasetId, dataset_not_found, tool_errors
 
 logger = get_logger(__name__)
 
@@ -34,24 +35,20 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             "indicators, analyst notes, and a metadata disclaimer. "
             "Use this tool before relying on a dataset for time-sensitive analysis."
         ),
+        annotations=READ_ONLY_CLOSED,
     )
-    def assess_dataset_freshness(dataset_id: str) -> dict[str, Any]:
+    def assess_dataset_freshness(dataset_id: DatasetId) -> dict[str, Any]:
         """
         Evaluate dataset update currency and freshness.
         Present the 'report' field verbatim — do not paraphrase it.
         """
-        try:
+        with tool_errors("assess_dataset_freshness"):
             AssessFreshnessInput(dataset_id=dataset_id)  # Validate
             catalog = get_catalog_service()
             detail = catalog.get_dataset_detail(dataset_id)
 
             if detail is None:
-                return {
-                    "error": (
-                        f"Dataset '{dataset_id}' not found. "
-                        "Use discover_disability_datasets to get valid dataset IDs."
-                    )
-                }
+                raise dataset_not_found(dataset_id)
 
             assessment = _analysis_service.assess_freshness(detail)
             logger.info(
@@ -66,6 +63,3 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             return {
                 "report": assessment.format_report(),
             }
-        except Exception as exc:  # noqa: BLE001
-            logger.error(f"assess_dataset_freshness failed: {exc}")
-            return {"error": str(exc)}

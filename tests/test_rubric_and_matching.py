@@ -68,10 +68,26 @@ class TestCriticalCap:
     def test_supporting_only_is_not_capped(self) -> None:
         assert acs._apply_critical_cap(100.0, [self._el("Full")], [1]) == (100.0, "")
 
-    def test_cap_note_appears_in_report(self) -> None:
-        a = ENGINE.evaluate("How long are appointment wait times at SSA field offices?")
+    def test_cap_note_explains_the_rating_in_its_section(self) -> None:
+        a = ENGINE.evaluate("Which field offices have the longest decision wait times?")
         assert a.coverage_rating == CoverageRating.LIMITED
-        assert "Rating capped at Limited" in a.format_report()
+        report = a.format_report()
+        coverage, rest = report.split("## Available Data", 1)
+        assert "Why Limited" not in coverage, "cap note must not sit under Answer Coverage"
+        rated = rest.split("## How Answer Coverage Was Rated", 1)[1].split("\n## ", 1)[0]
+        assert "**Why Limited**:" in rated
+        why = rated.split("**Why Limited**:", 1)[1]
+        assert "disability decision times by field office or DDS" in why
+        assert "only available indirectly (rated Proxy)" in why
+        assert "average up to Partial" in why
+        assert "—" not in why, "plain wording: no em dashes"
+
+    def test_cap_note_hedges_when_critical_ratings_differ(self) -> None:
+        note = acs._cap_explanation(
+            [self._el("Proxy"), self._el("None")], "Proxy", "Limited", "Partial"
+        )
+        assert note.startswith("The two things this question needs most,")
+        assert "are at best only available indirectly" in note
 
 
 # ── Matching robustness ───────────────────────────────────────────────────────
@@ -143,9 +159,14 @@ class TestReportTransparency:
     def test_report_explains_every_rating(self) -> None:
         a = ENGINE.evaluate("Are there racial disparities in SSA disability allowance rates by state?")
         report = a.format_report()
-        assert "## How Each Element Was Rated" in report
+        assert "## How Answer Coverage Was Rated" in report
         for el in a.required_information_elements:
             assert el.rationale and el.rationale.replace("|", "/") in report
+
+    def test_report_has_no_assessment_confidence_section(self) -> None:
+        for q in ("Which field offices have the longest decision wait times?",
+                  "Do allowance rates vary by state?"):
+            assert "Confidence" not in ENGINE.evaluate(q).format_report()
 
     def test_report_states_its_basis(self) -> None:
         report = ENGINE.evaluate("Do allowance rates vary by state?").format_report()
@@ -273,3 +294,73 @@ class TestMissingInformationAndImpact:
         el = InformationElement(element="X", description="", available=True, coverage_quality="Proxy")
         gap = ENGINE._build_gap_analysis([el], [1])
         assert "substantially addressed" in gap.impact_on_answer
+
+
+# ── Gap Analysis labels: "critical" means what the cap means ──────────────────
+
+RURAL_Q = (
+    "Can a researcher use currently available SSA public datasets to determine whether "
+    "rural communities have less access to disability services than urban communities?"
+)
+TRAVEL = "Travel distance to nearest SSA field office"
+
+
+def _el(name: str, quality: str) -> InformationElement:
+    return InformationElement(
+        element=name, description="", available=quality != "None", coverage_quality=quality
+    )
+
+
+class TestGapAnalysisLabels:
+    def test_report_labels_gaps_by_availability_not_criticality(self) -> None:
+        report = ENGINE.evaluate(RURAL_Q).format_report()
+        gap_section = report.split("## Gap Analysis", 1)[1].split("## How Answer Coverage", 1)[0]
+        assert "**Critical gaps**" not in gap_section
+        assert "**Partial gaps**" not in gap_section
+        assert "**Not published** (no SSA dataset on Data.gov provides it):" in gap_section
+        assert "**Only partly available**" in gap_section
+        assert "_(critical): the question cannot be answered without this information._" in gap_section
+
+    def test_critical_marker_follows_the_element_weight(self) -> None:
+        a = ENGINE.evaluate(FIELD_OFFICE_DECISION_Q)
+        report = a.format_report()
+        assert f"- {OFFICE_DECISION_ELEMENT} (critical)" in report
+        # Demoted to supporting by the per-office element, so not marked.
+        assert "- Disability claim processing times\n" in report
+        assert OFFICE_DECISION_ELEMENT in a.gap_analysis.critical_elements
+
+    def test_impact_matches_the_rating_when_one_critical_element_is_usable(self) -> None:
+        """Travel distance is critical and None, but another critical element is
+        Partial, so the cap allows Partial and the impact must agree."""
+        a = ENGINE.evaluate(RURAL_Q)
+        assert a.coverage_rating == CoverageRating.PARTIAL
+        assert TRAVEL in a.gap_analysis.critical_elements
+        assert "only be partly answered" in a.gap_analysis.impact_on_answer
+        assert "cannot be reliably answered" not in a.gap_analysis.impact_on_answer
+        assert TRAVEL in a.gap_analysis.impact_on_answer
+
+    def test_impact_when_no_critical_element_is_usable(self) -> None:
+        gap = ENGINE._build_gap_analysis([_el("A", "None"), _el("B", "Proxy")], [2, 2])
+        assert gap.impact_on_answer.startswith("The question cannot be reliably answered")
+
+    def test_impact_when_only_supporting_information_is_unpublished(self) -> None:
+        gap = ENGINE._build_gap_analysis([_el("A", "Full"), _el("B", "None")], [2, 1])
+        assert gap.critical_elements == ["A"]
+        assert "Supporting information is not published: B" in gap.impact_on_answer
+
+    def test_named_state_decision_time_question_is_rated_not_unsupported(self) -> None:
+        """Found by the agent evaluation: this wording used to match nothing."""
+        a = ENGINE.evaluate(
+            "What is the exact average number of days an initial disability decision takes in Ohio?"
+        )
+        assert a.coverage_rating == CoverageRating.PARTIAL
+        assert "Disability claim processing times" in [e.element for e in a.required_information_elements]
+        assert a.intent is not None and a.intent.scope == "State level"
+
+    def test_a_state_name_alone_does_not_make_a_question_in_scope(self) -> None:
+        a = ENGINE.evaluate("What is the weather in Washington DC today?")
+        assert a.coverage_rating == CoverageRating.UNSUPPORTED
+
+    def test_impact_has_no_em_dashes(self) -> None:
+        for q in (RURAL_Q, FIELD_OFFICE_DECISION_Q):
+            assert "—" not in ENGINE.evaluate(q).gap_analysis.impact_on_answer

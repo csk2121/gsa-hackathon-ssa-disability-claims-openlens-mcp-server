@@ -1,12 +1,13 @@
 """
-Phoenix Evaluations for SSA Disability Claims OpenLens.
+Engine benchmark for SSA Disability Claims OpenLens.
 
-This module defines evaluation tasks for the Answer Coverage Engine using
-the Arize Phoenix evals framework. It can be run standalone or integrated
-into a CI pipeline for regression testing.
+Runs the Answer Coverage engine directly (no LLM, no MCP) against benchmark
+questions with expected ratings. Free and deterministic, so it can run in CI.
+The agent-level evaluation, where Claude answers through the MCP server, is
+eval/agent_eval/.
 
 Usage:
-    python eval/phoenix_evals.py
+    python eval/engine_benchmark.py
 
 The evaluation measures:
   1. Coverage classification accuracy (does the engine assign the right CoverageRating?)
@@ -33,7 +34,6 @@ from src.ssa_disability_claims_openlens.models import CoverageRating
 from src.ssa_disability_claims_openlens.services.answer_coverage_service import (
     AnswerCoverageEngine,
 )
-
 
 # ── Benchmark dataset ──────────────────────────────────────────────────────────
 
@@ -135,6 +135,7 @@ class EvalResult:
     actual_rating: CoverageRating
     score_in_range: bool
     rating_match: bool
+    rating_exact: bool
     gaps_found: bool
     available_found: bool
     passed: bool
@@ -161,6 +162,7 @@ def run_evaluations(engine: AnswerCoverageEngine) -> list[EvalResult]:
         actual_idx = rating_order.index(assessment.coverage_rating)
         expected_idx = rating_order.index(case.expected_rating)
         rating_match = abs(actual_idx - expected_idx) <= 1
+        rating_exact = actual_idx == expected_idx
 
         # Check gap identification
         gaps_found = True
@@ -209,6 +211,7 @@ def run_evaluations(engine: AnswerCoverageEngine) -> list[EvalResult]:
             actual_rating=assessment.coverage_rating,
             score_in_range=score_in_range,
             rating_match=rating_match,
+            rating_exact=rating_exact,
             gaps_found=gaps_found,
             available_found=available_found,
             passed=passed,
@@ -227,7 +230,8 @@ def print_report(results: list[EvalResult]) -> None:
     print("SSA Disability Claims OpenLens — Answer Coverage Evaluation Report")
     print("=" * 70)
     print(f"Total cases: {total}  |  Passed: {passed}  |  Failed: {total - passed}")
-    print(f"Pass rate: {passed / total * 100:.1f}%")
+    exact = sum(1 for r in results if r.rating_exact)
+    print(f"Pass rate: {passed / total * 100:.1f}%  |  Exact rating match: {exact}/{total}")
     print("=" * 70)
 
     for r in results:
@@ -255,10 +259,11 @@ def print_report(results: list[EvalResult]) -> None:
             "actual_score": r.actual_score,
             "actual_rating": r.actual_rating.value,
             "expected_rating": r.case.expected_rating.value,
+            "rating_exact": r.rating_exact,
             "details": r.details,
         })
 
-    results_file.write_text(json.dumps(output, indent=2))
+    results_file.write_text(json.dumps(output, indent=2), encoding="utf-8")
     print(f"\nResults saved to: {results_file}")
 
 

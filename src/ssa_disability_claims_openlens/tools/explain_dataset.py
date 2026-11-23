@@ -14,6 +14,7 @@ from fastmcp import FastMCP
 from ..models import ExplainDatasetInput, ExplainDatasetResult
 from ..services.dataset_catalog_service import get_catalog_service
 from ..utils import get_logger
+from ._common import READ_ONLY_CLOSED, DatasetId, dataset_not_found, tool_errors
 
 logger = get_logger(__name__)
 
@@ -28,21 +29,17 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             "explain a dataset to a non-technical stakeholder. "
             "Requires a dataset_id from discover_disability_datasets."
         ),
+        annotations=READ_ONLY_CLOSED,
     )
-    def explain_dataset(dataset_id: str) -> dict[str, Any]:
+    def explain_dataset(dataset_id: DatasetId) -> dict[str, Any]:
         """Explain a dataset's contents, fields, use cases, and limitations."""
-        try:
+        with tool_errors("explain_dataset"):
             ExplainDatasetInput(dataset_id=dataset_id)  # Validate input
             catalog = get_catalog_service()
             detail = catalog.get_dataset_detail(dataset_id)
 
             if detail is None:
-                return {
-                    "error": (
-                        f"Dataset '{dataset_id}' not found. "
-                        "Use discover_disability_datasets to get valid dataset IDs."
-                    )
-                }
+                raise dataset_not_found(dataset_id)
 
             # Build a plain-English analyst summary
             field_names = [f.name for f in detail.major_fields[:5]]
@@ -64,6 +61,3 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             result = ExplainDatasetResult(dataset=detail, analyst_summary=analyst_summary)
             logger.info(f"explain_dataset: explained {dataset_id!r}")
             return result.model_dump(mode="json")
-        except Exception as exc:  # noqa: BLE001
-            logger.error(f"explain_dataset failed: {exc}")
-            return {"error": str(exc)}

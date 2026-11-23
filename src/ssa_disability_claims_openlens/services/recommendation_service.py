@@ -15,13 +15,14 @@ Architecture:
   evaluate_answer_coverage   recommend_transparency_improvements
 
 Lookup strategy:
-  - for_gaps(elements):  gap-driven lookup used by evaluate_answer_coverage.
-                         Takes a list of InformationElement objects, returns
-                         Recommendation objects for each gap, capped at 8.
-  - for_context(context): used by recommend_transparency_improvements. If the context
-                          names coverage gaps verbatim, returns only the recommendations
-                          that close them (via for_gaps). Otherwise scores the context
-                          against topic keywords (word-start matches) and returns top N.
+  - for_gaps(elements, weights): gap-driven lookup used by evaluate_answer_coverage.
+                         Ranks recommendations by how much the question depends on
+                         each gap (rating x critical/supporting weight), one per gap
+                         before follow-ups, and derives each priority from that.
+  - for_context(context): used by recommend_transparency_improvements. Assesses the
+                          question in the context and ranks by its real gaps (via
+                          for_gaps). Falls back to gaps named verbatim, then to topic
+                          keywords (word-start matches).
 """
 
 from __future__ import annotations
@@ -63,35 +64,21 @@ _RECOMMENDATION_KB: list[dict[str, Any]] = [
                      "location", "service", "demand", "busiest", "staffing", "staff"],
         "recommendations": [
             Recommendation(
-                title="Publish monthly visit volumes and appointment counts for each field office",
-                closes_gap="Field office operational metrics (staffing, volume, wait times)",
-                category="Operational Metrics",
+                title="Publish monthly walk-in and appointment visit volumes for each field office",
+                closes_gap="Field office appointment and walk-in volume",
+                also_closes=["Field office operational metrics (staffing, volume, wait times)"],
+                category="Access Data",
                 justification=(
                     "SSA publishes national average daily visitors (US-GOV-SSA-434), but "
-                    "per-office visitor counts exist only for FY2016 (US-GOV-SSA-1917), so "
-                    "offices cannot be ranked by current demand."
+                    "per-office visitor counts exist only for FY2016 (US-GOV-SSA-1917) and "
+                    "appointment volumes are not published, so offices cannot be ranked by "
+                    "current demand."
                 ),
                 priority=RecommendationPriority.HIGH,
                 affected_datasets=["ssa-field-office-visitors", "ssa-field-office-visitor-counts-2016"],
                 expected_impact=(
-                    "Would enable geographic ranking of service demand and evidence-based "
-                    "decisions about office resource allocation."
-                ),
-            ),
-            Recommendation(
-                title="Publish staffing FTE counts by field office every year",
-                closes_gap="Field office operational metrics (staffing, volume, wait times)",
-                category="Operational Metrics",
-                justification=(
-                    "Per-office employee counts were released once, for FY2016 "
-                    "(US-GOV-SSA-1918). An annual series combined with visit volumes would "
-                    "show where caseload-per-staff ratios indicate service strain."
-                ),
-                priority=RecommendationPriority.HIGH,
-                affected_datasets=["ssa-field-office-employee-counts-2016"],
-                expected_impact=(
-                    "Enables computation of caseload-per-FTE ratios and identification of "
-                    "understaffed offices before service failures occur."
+                    "Provides the baseline demand data needed to rank offices by current demand "
+                    "and to judge whether office capacity matches community need."
                 ),
             ),
             Recommendation(
@@ -123,21 +110,6 @@ _RECOMMENDATION_KB: list[dict[str, Any]] = [
                 expected_impact=(
                     "Enables SSA to proactively identify offices approaching capacity limits "
                     "before wait times become critical."
-                ),
-            ),
-            Recommendation(
-                title="Publish monthly walk-in and appointment visit volumes by field office",
-                closes_gap="Field office appointment and walk-in volume",
-                category="Access Data",
-                justification=(
-                    "Visit volumes are the foundational metric for measuring service demand "
-                    "and identifying access pressure points."
-                ),
-                priority=RecommendationPriority.HIGH,
-                affected_datasets=["ssa-field-office-visitors", "ssa-field-office-visitor-counts-2016"],
-                expected_impact=(
-                    "Provides the baseline demand data needed to evaluate whether office "
-                    "capacity matches community need."
                 ),
             ),
             Recommendation(
@@ -180,20 +152,22 @@ _RECOMMENDATION_KB: list[dict[str, Any]] = [
                      "caseload", "capacity", "adjudicator", "ratio"],
         "recommendations": [
             Recommendation(
-                title="Publish annual FTE staffing levels by field office and hearing office",
+                title="Publish annual staffing (FTE) counts for each field office and hearing office",
                 closes_gap="SSA office staffing levels",
+                also_closes=["Field office operational metrics (staffing, volume, wait times)"],
                 category="Operational Metrics",
                 justification=(
-                    "Staffing counts are needed to compute caseload ratios and explain "
-                    "processing time disparities across offices. Only a one-time FY2016 "
-                    "field office release exists (US-GOV-SSA-1918); no hearing office staffing "
-                    "data is in the catalog."
+                    "Per-office employee counts were released once, for FY2016 "
+                    "(US-GOV-SSA-1918), and no hearing office staffing data is in the catalog. "
+                    "An annual series, combined with visit volumes and pending cases, would show "
+                    "where caseload per staff member indicates service strain."
                 ),
                 priority=RecommendationPriority.HIGH,
-                affected_datasets=["ssa-field-office-locator", "ssa-hearing-office-workload"],
+                affected_datasets=["ssa-field-office-employee-counts-2016", "ssa-hearing-office-workload"],
                 expected_impact=(
-                    "Enables fair comparison of office performance by normalising pending "
-                    "cases against available staff capacity."
+                    "Enables fair comparison of office performance by normalising workload "
+                    "against available staff, and identifies understaffed offices before "
+                    "service failures occur."
                 ),
             ),
             Recommendation(
@@ -328,7 +302,7 @@ _RECOMMENDATION_KB: list[dict[str, Any]] = [
                     "counts would show where backlogs build up."
                 ),
                 priority=RecommendationPriority.MEDIUM,
-                affected_datasets=[],
+                affected_datasets=["ssa-field-office-claims-pending"],
                 expected_impact=(
                     "Would give a current, per-office backlog measure to set alongside "
                     "decision times."
@@ -641,11 +615,17 @@ _RECOMMENDATION_KB: list[dict[str, Any]] = [
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _gap_index() -> dict[str, list[Recommendation]]:
-    """Build a closes_gap → [Recommendation] index from the unified KB."""
+    """Build a gap → [Recommendation] index from the unified KB.
+
+    A recommendation is listed under its closes_gap and under every also_closes
+    gap, so one publication that fills two gaps is one recommendation, not two
+    near-duplicates.
+    """
     idx: dict[str, list[Recommendation]] = {}
     for topic in _RECOMMENDATION_KB:
         for rec in topic["recommendations"]:
-            idx.setdefault(rec.closes_gap, []).append(rec)
+            for gap in [rec.closes_gap, *rec.also_closes]:
+                idx.setdefault(gap, []).append(rec)
     return idx
 
 
@@ -676,6 +656,64 @@ def _focus_matches_topic(focus_area: str, topic: str) -> bool:
     return topic in (focus, focus.removesuffix("s"))
 
 
+_TITLE_TOPIC: dict[str, str] = {
+    rec.title: str(topic["topic"])
+    for topic in _RECOMMENDATION_KB
+    for rec in topic["recommendations"]
+}
+
+# How far short of Full each gap rating falls: 1 minus the element's points in the
+# coverage score (answer_coverage_service._QUALITY_SCORE; a test keeps them in step).
+_GAP_SEVERITY: dict[str, float] = {"None": 1.0, "Proxy": 0.7, "Partial": 0.4}
+
+_GAP_PHRASE: dict[str, str] = {
+    "None": "not published (rated None)",
+    "Proxy": "only available indirectly (rated Proxy)",
+    "Partial": "only partly available (rated Partial)",
+}
+
+_PRIORITIES = [RecommendationPriority.HIGH, RecommendationPriority.MEDIUM, RecommendationPriority.LOW]
+
+_REPORT_QUESTION_RE = re.compile(r"^## Question\s*\n+(.+?)\s*(?:\n##|\Z)", re.MULTILINE | re.DOTALL)
+
+# Longest context evaluated as a question (the evaluate_answer_coverage limit).
+_MAX_QUESTION_CHARS = 500
+
+
+def _question_from_context(context: str) -> str | None:
+    """The question to assess: a pasted report's Question section, or a short context."""
+    match = _REPORT_QUESTION_RE.search(context)
+    if match:
+        return match.group(1).strip()[:_MAX_QUESTION_CHARS]
+    text = context.strip()
+    return text if 0 < len(text) <= _MAX_QUESTION_CHARS else None
+
+
+def _gap_priority(
+    quality: str, weight: int, step: int, kb_priority: RecommendationPriority
+) -> tuple[RecommendationPriority, str]:
+    """
+    Priority from how much the question depends on the gap a recommendation closes.
+
+    urgency = severity x weight (critical 2, supporting 1):
+      High   >= 1.0  critical information rated None or Proxy; supporting rated None
+      Medium >= 0.7  critical rated Partial; supporting rated Proxy
+      Low            supporting rated Partial
+    A second or later recommendation for the same gap is a follow-up and drops one
+    level, and no recommendation rises above its knowledge-base priority.
+    """
+    urgency = _GAP_SEVERITY[quality] * weight
+    level = 0 if urgency >= 1.0 else 1 if urgency >= 0.7 else 2
+    if step:
+        level = min(level + 1, 2)
+    level = max(level, _PRIORITIES.index(kb_priority))
+    kind = "critical" if weight == 2 else "supporting"
+    reason = f"Closes {kind} information that is {_GAP_PHRASE[quality]}."
+    if step:
+        reason = f"Follow-up: {reason[0].lower()}{reason[1:]}"
+    return _PRIORITIES[level], reason
+
+
 # ── Service ────────────────────────────────────────────────────────────────────
 
 class RecommendationService:
@@ -699,51 +737,120 @@ class RecommendationService:
         self,
         elements: list[InformationElement],
         max_recommendations: int = 8,
+        weights: list[int] | None = None,
     ) -> list[Recommendation]:
         """
         Return Recommendation objects that address the gaps in the given
-        InformationElement list.
+        InformationElement list, most urgent first.
 
-        Only elements with coverage_quality None, Partial, or Proxy generate
-        recommendations.  Results are deduplicated by title, sorted High →
-        Medium → Low, then capped at max_recommendations.
+        Only elements rated None, Proxy or Partial generate recommendations.
+        Gaps are ordered by urgency (severity x weight), and each gap's strongest
+        recommendation comes before any gap's follow-ups, so the top of the list
+        covers as many gaps as possible.
+
+        With `weights` (critical 2, supporting 1, from the coverage assessment), each
+        recommendation's priority is derived from the gap it closes (_gap_priority)
+        and explained in priority_reason. Without them, the elements' ratings are not
+        known to be real, so the knowledge-base priorities are kept.
         """
-        items: list[Recommendation] = []
+        derive = weights is not None
+        gap_weights = weights if weights is not None else [1] * len(elements)
+        gaps = [
+            (el, w) for el, w in zip(elements, gap_weights, strict=True)
+            if el.coverage_quality in _GAP_SEVERITY
+        ]
+        # Stable sort: equally urgent gaps keep the assessment's order.
+        gaps.sort(key=lambda g: -_GAP_SEVERITY[g[0].coverage_quality] * g[1])
+
+        ranked: list[tuple[int, int, int, Recommendation]] = []
         seen_titles: set[str] = set()
+        gap_names = {el.element for el, _ in gaps}
+        for gap_pos, (el, w) in enumerate(gaps):
+            recs = sorted(
+                _GAP_INDEX.get(el.element) or self._fallback_for(el),
+                key=lambda r: self._PRIORITY_RANK.get(r.priority, 99),
+            )
+            step = 0
+            for rec in recs:
+                if rec.title in seen_titles:
+                    continue
+                if rec.closes_gap != el.element and rec.closes_gap in gap_names:
+                    continue  # its own gap is in this question; it is listed there
+                seen_titles.add(rec.title)
+                if rec.closes_gap != el.element:
+                    # Present it under the gap this question has; keep the others it fills.
+                    others = [g for g in [rec.closes_gap, *rec.also_closes] if g != el.element]
+                    rec = rec.model_copy(update={"closes_gap": el.element, "also_closes": others})
+                if derive:
+                    priority, reason = _gap_priority(el.coverage_quality, w, step, rec.priority)
+                    rec = rec.model_copy(update={"priority": priority, "priority_reason": reason})
+                ranked.append((self._PRIORITY_RANK.get(rec.priority, 99), step, gap_pos, rec))
+                step += 1
 
-        for el in elements:
-            if el.coverage_quality in ("None", "Partial", "Proxy"):
-                for rec in _GAP_INDEX.get(el.element, []):
-                    if rec.title not in seen_titles:
-                        items.append(rec)
-                        seen_titles.add(rec.title)
-
-        # Fallback for gaps with no KB entry
-        for el in elements:
-            if el.coverage_quality == "None" and el.element not in _GAP_INDEX:
-                fallback_title = f"Publish data covering: {el.element}"
-                if fallback_title not in seen_titles:
-                    items.append(Recommendation(
-                        title=fallback_title,
-                        closes_gap=el.element,
-                        category="Program Outcomes",
-                        justification=(
-                            f"No dataset in the catalog provides this, and it is required to "
-                            f"answer questions about {el.element.lower()}."
-                        ),
-                        priority=RecommendationPriority.HIGH,
-                        affected_datasets=[],
-                        expected_impact=(
-                            f"Publishing {el.element.lower()} would directly close a "
-                            "critical gap in public understanding."
-                        ),
-                    ))
-                    seen_titles.add(fallback_title)
-
-        # Sort High → Medium → Low before applying the cap so the most
+        # High → Medium → Low; within a level, first recommendations before
+        # follow-ups, then the most urgent gap first. Sorting before the cap means
         # important recommendations are never displaced by lower-priority ones.
-        items.sort(key=lambda r: self._PRIORITY_RANK.get(r.priority, 99))
-        return items[:max_recommendations]
+        ranked.sort(key=lambda r: r[:3])
+        return [rec for *_, rec in ranked[:max_recommendations]]
+
+    @staticmethod
+    def _fallback_for(el: InformationElement) -> list[Recommendation]:
+        """A generic recommendation for an unpublished element with no KB entry."""
+        if el.coverage_quality != "None":
+            return []
+        return [Recommendation(
+            title=f"Publish data covering: {el.element}",
+            closes_gap=el.element,
+            category="Program Outcomes",
+            justification=(
+                f"No dataset in the catalog provides this, and it is required to "
+                f"answer questions about {el.element.lower()}."
+            ),
+            priority=RecommendationPriority.HIGH,
+            affected_datasets=[],
+            expected_impact=(
+                f"Publishing {el.element.lower()} would close a gap in public understanding."
+            ),
+        )]
+
+    # ── Assessment-driven lookup ───────────────────────────────────────────────
+
+    def _for_assessment(
+        self,
+        context: str,
+        named_gaps: list[str],
+        focus_area: str | None,
+        max_recommendations: int,
+    ) -> list[Recommendation] | None:
+        """
+        Assess the question in `context` and rank recommendations by its real gaps.
+
+        Returns None when there is no question to assess or it has no gaps, so the
+        caller can fall back to the named-gap or keyword lookups.
+        """
+        question = _question_from_context(context)
+        if question is None:
+            return None
+        # Local import: answer_coverage_service imports this module.
+        from .answer_coverage_service import get_answer_coverage_engine
+
+        assessment = get_answer_coverage_engine().evaluate(question)
+        critical = set(assessment.gap_analysis.critical_elements)
+        pairs = [
+            (el, 2 if el.element in critical else 1)
+            for el in assessment.required_information_elements
+            if not named_gaps or el.element in named_gaps
+        ]
+        if not any(el.coverage_quality in _GAP_SEVERITY for el, _ in pairs):
+            return None
+
+        recs = self.for_gaps(
+            [el for el, _ in pairs], max_recommendations=20, weights=[w for _, w in pairs]
+        )
+        if focus_area:
+            focused = [r for r in recs if _focus_matches_topic(focus_area, _TITLE_TOPIC.get(r.title, ""))]
+            recs = focused or recs
+        return recs[:max_recommendations]
 
     # ── Keyword-driven lookup ──────────────────────────────────────────────────
 
@@ -756,10 +863,15 @@ class RecommendationService:
         """
         Return a TransparencyImprovementPlan for a question or topic context.
 
-        If the context names gaps from a coverage assessment (e.g. pasted from
-        evaluate_answer_coverage), only recommendations that close those gaps are
-        returned. Otherwise each topic bucket is scored against the context, results
-        are deduplicated by title, and the top N are sorted by score then priority.
+        Lookups, in order:
+          1. Assessment: the question (a pasted report's Question section, or a short
+             context) is assessed, and recommendations are ranked by its real gaps,
+             with priorities derived from how much the question depends on each.
+             Gaps the context names verbatim narrow the result to those gaps.
+          2. Named gaps: the context names gaps the assessment did not produce;
+             only recommendations that close them are returned.
+          3. Keywords: each topic bucket is scored against the context, results are
+             deduplicated by title, and the top N are sorted by score then priority.
         """
         priority_order = {
             RecommendationPriority.HIGH: 0,
@@ -769,6 +881,17 @@ class RecommendationService:
         full_text = f"{context} {focus_area or ''}"
 
         gaps = _named_gaps(full_text)
+        assessed = self._for_assessment(context, gaps, focus_area, max_recommendations)
+        if assessed:
+            high_count = sum(1 for r in assessed if r.priority == RecommendationPriority.HIGH)
+            return TransparencyImprovementPlan(
+                context=context,
+                recommendations=assessed,
+                total_recommendations=len(assessed),
+                high_priority_count=high_count,
+                executive_summary=self._build_summary(context, assessed, high_count),
+            )
+
         if gaps:
             gap_recs = self.for_gaps(
                 [

@@ -6,6 +6,7 @@
     "actual_score": 60.0,
     "actual_rating": "Partial",
     "expected_rating": "Partial",
+    "rating_exact": true,
     "details": "PASS"
   },
   {
@@ -15,6 +16,7 @@
     "actual_score": 30.0,
     "actual_rating": "Limited",
     "expected_rating": "Limited",
+    "rating_exact": true,
     "details": "PASS"
   },
   {
@@ -24,6 +26,7 @@
     "actual_score": 39.0,
     "actual_rating": "Limited",
     "expected_rating": "Partial",
+    "rating_exact": false,
     "details": "PASS"
   },
   {
@@ -33,6 +36,7 @@
     "actual_score": 60.0,
     "actual_rating": "Partial",
     "expected_rating": "Partial",
+    "rating_exact": true,
     "details": "PASS"
   },
   {
@@ -42,6 +46,7 @@
     "actual_score": 73.3,
     "actual_rating": "Partial",
     "expected_rating": "Partial",
+    "rating_exact": true,
     "details": "PASS"
   },
   {
@@ -51,6 +56,7 @@
     "actual_score": 0.0,
     "actual_rating": "Unsupported",
     "expected_rating": "Unsupported",
+    "rating_exact": true,
     "details": "PASS"
   },
   {
@@ -60,6 +66,7 @@
     "actual_score": 39.0,
     "actual_rating": "Limited",
     "expected_rating": "Partial",
+    "rating_exact": false,
     "details": "PASS"
   },
   {
@@ -69,6 +76,7 @@
     "actual_score": 60.0,
     "actual_rating": "Partial",
     "expected_rating": "Partial",
+    "rating_exact": true,
     "details": "PASS"
   }
 ]

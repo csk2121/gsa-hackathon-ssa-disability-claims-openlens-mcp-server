@@ -14,6 +14,7 @@ from fastmcp import FastMCP
 from ..models import EvaluateAnswerCoverageInput
 from ..services.answer_coverage_service import get_answer_coverage_engine
 from ..utils import get_logger
+from ._common import READ_ONLY_CLOSED, Question, tool_errors
 
 logger = get_logger(__name__)
 
@@ -35,15 +36,16 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             "'Which field offices have the longest backlogs?', "
             "'What data should SSA publish to improve transparency?'"
         ),
+        annotations=READ_ONLY_CLOSED,
     )
     def evaluate_answer_coverage(
-        question: str,
+        question: Question,
     ) -> dict[str, Any]:
         """
         Assess how well SSA public datasets support answering a question.
         Present the 'report' field verbatim — do not paraphrase it.
         """
-        try:
+        with tool_errors("evaluate_answer_coverage"):
             inp = EvaluateAnswerCoverageInput(
                 question=question,
                 include_recommendations=True,
@@ -64,6 +66,3 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
             return {
                 "report": assessment.format_report(),
             }
-        except Exception as exc:  # noqa: BLE001
-            logger.error(f"evaluate_answer_coverage failed: {exc}")
-            return {"error": str(exc)}

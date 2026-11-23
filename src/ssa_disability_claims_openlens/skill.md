@@ -103,10 +103,6 @@ Answer Coverage
 ---------------
 **<Complete | High | Partial | Limited | Unsupported>**
 
-Assessment Confidence
----------------------
-**<High | Medium | Low>**
-
 Available Data
 --------------
 | Sl.# | Data | Web Link |
@@ -122,11 +118,12 @@ Missing Information
 
 Gap Analysis
 ------------
-**Critical gaps** (data not publicly available):
-- <gap 1>
+**Not published** (no SSA dataset on Data.gov provides it):
+- <element rated None> (critical, when the question cannot be answered without it)
+  - *Checked:* <the Data.gov search behind it>
 
-**Partial gaps** (data exists but incomplete):
-- <gap 1>
+**Only partly available** (published in part, or only indirectly):
+- <element rated Partial or Proxy>
 
 **Impact**: <one-sentence summary of how gaps affect answer quality>
 
@@ -207,36 +204,15 @@ Potential Impact
 > found enough domain context to identify what is missing and recommend what
 > SSA should publish. This is a meaningful and defensible output.
 
-### Assessment Confidence
-
-Assessment Confidence measures how certain the engine is about the **quality of its own analysis** — not how much data SSA has published (that is what Answer Coverage already captures).
-
-| Condition | Assessment Confidence |
-|-----------|----------------------|
-| No relevant datasets found | **Low** |
-| Relevant datasets found but weak evidence | **Medium** |
-| Relevant datasets found + clear gaps identified | **High** |
-| Relevant datasets found + multiple corroborating datasets | **High** |
-
-Mapped to coverage ratings:
-
-| Coverage Rating | Assessment Confidence |
-|-----------------|-----------------------|
-| Unsupported | Low |
-| Limited | Medium |
-| Partial | High |
-| High | High |
-| Complete | High |
-
 ### Gap Types
 
-**Critical gaps** — Absent from all public datasets:
+**Not published**: no SSA dataset on Data.gov provides it:
 - Race and ethnicity data
 - Field office appointment wait times and visit volumes
 - Staffing levels by office
 - End-to-end processing timelines
 
-**Partial gaps** — Available but incomplete:
+**Only partly available**: published in part, or only indirectly:
 - State-level processing times (national averages only)
 - Processing time distribution (averages, no percentiles)
 - Demographic cross-tabulations (limited)

@@ -56,6 +56,9 @@ Frequencies, dates and coverage below are from the Data.gov snapshot synced 2026
 | `ssa-field-office-employee-counts-2016` | 2016 Field Office Employee Counts | US-GOV-SSA-1918 | One-time (FOIA) | Field office | FY2016 |
 | `ssa-field-office-visitor-counts-2016` | 2016 Field Office Visitor Counts | US-GOV-SSA-1917 | One-time (FOIA) | Field office | FY2016 |
 | `ssa-field-office-appointments-21-days` | Percentage of Field Office Claims Appointments Scheduled Within 21 Days - FY 2005-2015 | US-GOV-SSA-431 | Monthly (discontinued) | Not stated | FY2005–2015 |
+| `ssa-field-office-claims-pending` | Field Office Claims Pending | US-GOV-SSA-435 | Annual (from description) | National | FY2006–2022 |
+| `ssa-field-office-telephone-service` | Field Office Telephone Service - Monthly National Answer Rate and Busy Rate | US-GOV-SSA-1414 | Monthly | National | FY2013 on |
+| `ssa-title2-claim-receipts-by-field-office-2016` | 2016 Title 2 Claim Receipts by Field Office | US-GOV-SSA-1919 | One-time (FOIA) | Field office | FY2016 |
 | `ssa-di-ssi-participants-employment-2015` | DI & SSI Program Participants: Characteristics & Employment, 2015 | US-GOV-SSA-2278 | One-time | Not stated | 2015 |
 | `ssa-nscf` | National Survey of SSI Children and Families (NSCF) | US-GOV-SSA-328 | One-time survey | Continental U.S. | 2001–2002 |
 | `ssa-red-book` | Red Book: A Guide to Work Incentives | none — manual check | — | National | Policy reference |
@@ -134,6 +137,16 @@ Frequencies, dates and coverage below are from the Data.gov snapshot synced 2026
 **Weaknesses:** One-time FOIA releases and a discontinued series — no current data
 **Best for:** Historical baselines for field office demand, staffing and appointment access
 
+### FY2016 Title II Claim Receipts by Field Office
+**Strengths:** Title II disability claims received by each field office; pairs with FY2016 employee counts for a claims-per-staff ratio  
+**Weaknesses:** One-time FOIA release; Title II only (no SSI); receipts only — no pending counts or decision times  
+**Best for:** Historical baseline for disability claim volume by office
+
+### Field Office Claims Pending and Telephone Service
+**Strengths:** Yearly field office claims pending, FY2006–2022; monthly phone answer and busy rates, FY2013 on  
+**Weaknesses:** National totals only; claims pending combines all claim types and ends in FY2022; phone data excludes abandoned and overflow calls  
+**Best for:** National trends in field office backlog and phone access
+
 ### DI & SSI Participants: Characteristics & Employment (2015) and NSCF (2001–2002)
 **Strengths:** Work activity before and after award; household socioeconomic status of SSI child applicants and recipients  
 **Weaknesses:** One-time publications; NSCF covers children only  
@@ -157,6 +170,6 @@ re-runs them and fails when a new result needs review (weekly in CI).
 3. **Applicant income only historical** — The only source is a 2001–2002 survey of SSI children and families (US-GOV-SSA-328); no adult or current data
 4. **No travel distance, service areas or office accessibility data** — None of these are described by any SSA dataset; the only related record is national interpreter call counts
 5. **No individual-level linkage** — Initial, reconsideration and hearing data cannot be linked for the same claimant, so end-to-end waits cannot be computed
-6. **Field office operations only historical** — Per-office staffing and visitor counts exist only for FY2016; appointment timeliness only for FY2005–2015
+6. **Field office operations only historical** — Per-office staffing, visitor and Title II claim receipt counts exist only for FY2016; appointment timeliness only for FY2005–2015; current claims pending and phone service data are national only
 7. **No sub-state outcome data** — State agency allowance data stops at state level; hearing offices are not mapped to the areas they serve
 8. **Averages only** — Processing-time datasets publish averages, not distributions

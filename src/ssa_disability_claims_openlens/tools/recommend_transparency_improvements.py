@@ -14,6 +14,13 @@ from fastmcp import FastMCP
 from ..models import RecommendTransparencyInput
 from ..services.recommendation_service import RecommendationService
 from ..utils import get_logger
+from ._common import (
+    READ_ONLY_CLOSED,
+    FocusArea,
+    MaxRecommendations,
+    RecommendationContext,
+    tool_errors,
+)
 
 logger = get_logger(__name__)
 
@@ -26,20 +33,26 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
         description=(
             "Recommends specific, actionable improvements to SSA public data transparency "
             "based on a question, topic, or identified information gap. Each recommendation "
-            "includes new data elements to publish, expected public impact, and implementation "
-            "effort. Recommendations are ranked by priority (High / Medium / Low). "
+            "says what to publish, the gap it closes, why it matters, the existing datasets "
+            "it builds on and the expected public impact. When the context is a question "
+            "(or a pasted evaluate_answer_coverage report), the question is assessed and "
+            "recommendations are ranked by its real gaps: High closes information the "
+            "question depends on most that is missing or only indirect; Medium and Low close "
+            "smaller gaps or follow up on a gap already covered. Each one gives its "
+            "priority_reason, and the first recommendations cover as many gaps as possible. "
             "\n\nUse this tool when an analyst wants to propose new datasets or data elements, "
             "improve answer coverage for a known gap, or build a data publication roadmap. "
             "Works best when given the output of evaluate_answer_coverage as context."
         ),
+        annotations=READ_ONLY_CLOSED,
     )
     def recommend_transparency_improvements(
-        context: str,
-        focus_area: str | None = None,
-        max_recommendations: int = 5,
+        context: RecommendationContext,
+        focus_area: FocusArea = None,
+        max_recommendations: MaxRecommendations = 5,
     ) -> dict[str, Any]:
         """Generate prioritized transparency improvement recommendations."""
-        try:
+        with tool_errors("recommend_transparency_improvements"):
             inp = RecommendTransparencyInput(
                 context=context,
                 focus_area=focus_area,
@@ -56,6 +69,3 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
                 f"({plan.high_priority_count} high priority)"
             )
             return plan.model_dump(mode="json")
-        except Exception as exc:  # noqa: BLE001
-            logger.error(f"recommend_transparency_improvements failed: {exc}")
-            return {"error": str(exc)}

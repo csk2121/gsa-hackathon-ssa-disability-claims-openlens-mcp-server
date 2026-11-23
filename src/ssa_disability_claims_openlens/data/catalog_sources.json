@@ -27,6 +27,9 @@
     "ssa-field-office-employee-counts-2016": "2016-field-office-employee-counts",
     "ssa-field-office-visitor-counts-2016": "2016-field-office-visitor-counts",
     "ssa-field-office-appointments-21-days": "percentage-of-field-office-claims-appointments-scheduled-within-21-days-fy-2005-2015",
+    "ssa-field-office-claims-pending": "field-office-claims-pending",
+    "ssa-field-office-telephone-service": "field-office-telephone-service-monthly-national-answer-rate-and-busy-rate",
+    "ssa-title2-claim-receipts-by-field-office-2016": "2016-title-2-claim-receipts-by-field-office",
     "ssa-di-ssi-participants-employment-2015": "di-ssi-program-participants-characteristics-employment-2015",
     "ssa-nscf": "national-survey-of-ssi-children-and-families-nscf"
   },
