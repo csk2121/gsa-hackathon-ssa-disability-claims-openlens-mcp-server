@@ -26,6 +26,16 @@ instructions: |
     → Call evaluate_answer_coverage with the exact user question as the value
       of the "question" parameter.
 
+  For follow-up questions about what SSA should publish, what to prioritize,
+  what data is missing, or how to close gaps (e.g. "What should SSA publish first
+  to close these gaps?", "What data would help answer this?", "How can SSA
+  improve transparency here?"):
+    → Call recommend_transparency_improvements.
+    → Pass the original user question (from the conversation) as the "context"
+      parameter — not a summary, not the follow-up question itself.
+      Example: if the prior question was "Which field offices have the longest
+      decision wait times?", pass that exact question as context.
+
   For "what datasets are available" or "list datasets":
     → Call discover_disability_datasets first.
 
@@ -48,22 +58,22 @@ instructions: |
     → Apply the same rule: ALWAYS call discover_disability_datasets first, then
       call analyze_dataset_completeness with the matched dataset_id.
 
-  ## How to present the assess_dataset_freshness result
+  ## How to present every tool result
 
-  The tool returns one field: "report".
+  Every tool returns one field: "report".
   Output the exact string value of "report" and nothing else.
   Do not add words. Do not remove words. Do not change any word.
-  Every section — the metadata table, Freshness Rationale, Staleness Indicators,
-  Analyst Notes, and the disclaimer — is already written inside "report". Copy all of it.
+  The complete formatted answer — including every section, every heading, every
+  table row — is already written inside "report". Copy all of it exactly.
 
-  ## How to present the evaluate_answer_coverage result
-
-  The tool returns one field: "report".
-  Output the exact string value of "report" and nothing else.
-  Do not add words. Do not remove words. Do not change any word.
-  Every section — Answer Coverage, Available Data, Missing Information,
-  Gap Analysis, How Answer Coverage Was Rated, Transparency Recommendations,
-  and Potential Impact — is already written inside "report". Copy all of it.
+  This applies to all tools:
+  - evaluate_answer_coverage: report contains Intent, Answer Coverage, Available
+    Data, Missing Information, Gap Analysis, How Answer Coverage Was Rated,
+    Transparency Recommendations, and Potential Impact.
+  - recommend_transparency_improvements: report contains Context, Summary, and
+    Prioritized Recommendations grouped by priority and category.
+  - assess_dataset_freshness: report contains the metadata table, Freshness
+    Rationale, Staleness Indicators, Analyst Notes, and disclaimer.
 
   ## After the report
 

@@ -660,6 +660,113 @@ class TransparencyImprovementPlan(BaseModel):
         )
         return self
 
+    def format_report(self) -> str:
+        """
+        Return a human-readable Transparency Improvement Plan report.
+
+        Uses the same ATX heading and table conventions as AnswerCoverageAssessment.format_report()
+        so that the LLM instruction is identical: present the value of 'report' verbatim.
+        """
+        # Derive the question/topic heading from the context.
+        # If the context looks like a pasted OpenLens report, extract the Question section.
+        import re as _re
+        _q_match = _re.search(r"^## Question\s*\n+(.+?)\s*(?:\n##|\Z)", self.context, _re.MULTILINE | _re.DOTALL)
+        topic = _q_match.group(1).strip() if _q_match else self.context.strip()
+
+        # Build a prose summary from the actual recommendation data — not the
+        # internal executive_summary string which is a machine-generated metadata
+        # sentence (truncated context + top title) unsuitable for display.
+        high_recs = [r for r in self.recommendations if r.priority == RecommendationPriority.HIGH]
+        med_recs  = [r for r in self.recommendations if r.priority == RecommendationPriority.MEDIUM]
+        low_recs  = [r for r in self.recommendations if r.priority == RecommendationPriority.LOW]
+
+        priority_parts: list[str] = []
+        if high_recs:
+            priority_parts.append(f"{len(high_recs)} High")
+        if med_recs:
+            priority_parts.append(f"{len(med_recs)} Medium")
+        if low_recs:
+            priority_parts.append(f"{len(low_recs)} Low")
+        priority_summary = " · ".join(priority_parts) if priority_parts else "none"
+
+        # Collect the unique gaps addressed across all recommendations.
+        gaps_addressed: list[str] = []
+        seen_gaps: set[str] = set()
+        for rec in self.recommendations:
+            if rec.closes_gap not in seen_gaps:
+                gaps_addressed.append(rec.closes_gap)
+                seen_gaps.add(rec.closes_gap)
+
+        prose_summary_lines: list[str] = [
+            f"**{len(self.recommendations)} recommendations** ranked by how urgently each gap "
+            f"must be closed to answer the question above ({priority_summary} priority).",
+        ]
+        if gaps_addressed:
+            prose_summary_lines.append("")
+            prose_summary_lines.append("**Information gaps addressed:**")
+            for gap in gaps_addressed:
+                prose_summary_lines.append(f"- {gap}")
+
+        lines: list[str] = [
+            "# SSA Disability Claims OpenLens — Transparency Recommendations",
+            "",
+            "## Context",
+            "",
+            topic,
+            "",
+            "## Summary",
+            "",
+            *prose_summary_lines,
+            "",
+            "## Prioritized Recommendations",
+            "",
+        ]
+
+        if not self.recommendations:
+            lines.append("No targeted recommendations were generated for this context.")
+        else:
+            # Group by priority, then by category within each priority level.
+            priority_order = [RecommendationPriority.HIGH, RecommendationPriority.MEDIUM, RecommendationPriority.LOW]
+            by_priority: dict[RecommendationPriority, list[Recommendation]] = {}
+            for rec in self.recommendations:
+                by_priority.setdefault(rec.priority, []).append(rec)
+
+            global_idx = 1
+            for priority in priority_order:
+                recs_at_level = by_priority.get(priority, [])
+                if not recs_at_level:
+                    continue
+                lines.append(f"### {priority.value} Priority")
+                lines.append("")
+                # Group by category within the priority level
+                by_category: dict[str, list[Recommendation]] = {}
+                for rec in recs_at_level:
+                    by_category.setdefault(rec.category, []).append(rec)
+                for category, cat_recs in by_category.items():
+                    lines.append(f"**[{category}]**")
+                    lines.append("")
+                    for rec in cat_recs:
+                        lines.append(f"{global_idx}. {rec.title}")
+                        lines.append(f"   **Closes gap**: {rec.closes_gap}")
+                        if rec.also_closes:
+                            also = ", ".join(rec.also_closes)
+                            lines.append(f"   **Also closes**: {also}")
+                        lines.append(f"   **Justification**: {rec.justification}")
+                        if rec.priority_reason:
+                            lines.append(f"   **Why {priority.value} priority**: {rec.priority_reason}")
+                        if rec.expected_impact:
+                            lines.append(f"   **Expected impact**: {rec.expected_impact}")
+                        lines.append("")
+                        global_idx += 1
+
+        lines += [
+            "---",
+            "_Recommendations are ranked by how much the question depends on each gap: "
+            "High closes information the question depends on most that is missing or only indirect; "
+            "Medium and Low close smaller gaps or follow up on a gap already covered._",
+        ]
+        return "\n".join(lines)
+
 
 # ── Tool input schemas ─────────────────────────────────────────────────────────
 

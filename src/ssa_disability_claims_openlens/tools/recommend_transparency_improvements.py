@@ -32,14 +32,15 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
         name="recommend_transparency_improvements",
         description=(
             "Recommends specific, actionable improvements to SSA public data transparency "
-            "based on a question, topic, or identified information gap. Each recommendation "
-            "says what to publish, the gap it closes, why it matters, the existing datasets "
-            "it builds on and the expected public impact. When the context is a question "
-            "(or a pasted evaluate_answer_coverage report), the question is assessed and "
-            "recommendations are ranked by its real gaps: High closes information the "
-            "question depends on most that is missing or only indirect; Medium and Low close "
-            "smaller gaps or follow up on a gap already covered. Each one gives its "
-            "priority_reason, and the first recommendations cover as many gaps as possible. "
+            "based on a question, topic, or identified information gap. Returns a fully "
+            "formatted report in the 'report' field. IMPORTANT: Always present the value "
+            "of 'report' verbatim to the user — do not paraphrase, summarise, or rewrite it. "
+            "When the context is a question (or a pasted evaluate_answer_coverage report), "
+            "the question is assessed and recommendations are ranked by its real gaps: "
+            "High closes information the question depends on most that is missing or only "
+            "indirect; Medium and Low close smaller gaps or follow up on a gap already "
+            "covered. Each one gives its priority_reason, and the first recommendations "
+            "cover as many gaps as possible. "
             "\n\nUse this tool when an analyst wants to propose new datasets or data elements, "
             "improve answer coverage for a known gap, or build a data publication roadmap. "
             "Works best when given the output of evaluate_answer_coverage as context."
@@ -51,7 +52,10 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
         focus_area: FocusArea = None,
         max_recommendations: MaxRecommendations = 5,
     ) -> dict[str, Any]:
-        """Generate prioritized transparency improvement recommendations."""
+        """Generate prioritized transparency improvement recommendations.
+
+        Present the 'report' field verbatim — do not paraphrase it.
+        """
         with tool_errors("recommend_transparency_improvements"):
             inp = RecommendTransparencyInput(
                 context=context,
@@ -68,4 +72,4 @@ def register(mcp: FastMCP) -> None:  # noqa: D103
                 f"generated {plan.total_recommendations} recommendations "
                 f"({plan.high_priority_count} high priority)"
             )
-            return plan.model_dump(mode="json")
+            return {"report": plan.format_report()}
