@@ -275,7 +275,7 @@ Generate prioritized, actionable recommendations for improving SSA public data t
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/gsa-hackathon-ssa-disability-claims-openlens-mcp-server.git
+git clone https://github.com/csk2121/gsa-hackathon-ssa-disability-claims-openlens-mcp-server.git
 cd gsa-hackathon-ssa-disability-claims-openlens-mcp-server
 
 # Create virtual environment
@@ -327,8 +327,21 @@ The agent (`ssa_openlens_agent`) will be available immediately in the watsonx Or
 ### Run tests
 
 ```bash
-pytest tests/ -v
+pytest          # runs tests/ and mcp_tests/ with coverage (settings in pyproject.toml)
 ```
+
+**397 tests, all passing, with 94% line coverage of `src/`.** CI (GitHub Actions) runs the
+same suite on every push, together with Ruff lint and mypy type checks.
+
+| Suite | Tests | What it covers |
+|-------|------:|----------------|
+| Coverage engine (`test_rubric_and_matching`, `test_answer_coverage`, `test_benchmark`) | 173 | Question matching, scoring, ratings and the expected rating for each benchmark question |
+| Catalog grounding (`test_catalog_grounding`) | 43 | Every name, URL, date and frequency matches the Data.gov snapshot; every "no public data" claim has recent search evidence |
+| Recommendations and equity (`test_recommendations`, `test_accessibility_equity`) | 51 | Prioritized recommendations, access and equity questions |
+| Tools (`test_discovery`, `test_explain`, `test_compare`, `test_completeness`, `test_freshness`) | 48 | Each tool's output and error handling |
+| Evaluation checks (`test_eval_checks`) | 27 | The code evaluators used by the agent evaluation |
+| Security (`test_security`) | 15 | Live dataset ID allowlist, path traversal, Data.gov base URL validation (SSRF) |
+| MCP protocol and hardening (`mcp_tests/`) | 40 | Tools, prompts and resources over a real MCP client session; read-only annotations, schema limits, invalid input, masked internal errors |
 
 ### Run evaluations
 
@@ -367,6 +380,20 @@ Each experiment is saved to `eval/results/agent/<name>.json`, and
 The test set covers the demo questions plus out-of-scope, fabrication-bait and
 prompt-injection cases.
 
+### Evaluation results
+
+Agent `claude-sonnet-5-5`, judged by `claude-sonnet-5-5`, on the 12-question `openlens-eval-0` test set:
+
+| Experiment | What changed | Cases passed (all checks) | Avg latency | Avg tokens |
+|------------|--------------|--------------------------:|------------:|-----------:|
+| v01-baseline | Minimal system prompt | 17% (2/12) | 11.06s | 17,672 |
+| v02-grounded | State only what the tools returned | 25% (3/12) | 10.81s | 14,915 |
+| v03-verbatim | Present the coverage report verbatim | 92% (11/12) | 11.04s | 15,413 |
+| **v03-server-fix** | Server fix for state-level initial decision questions | **100% (12/12)** | 11.29s | 15,567 |
+
+The engine benchmark passes 8 of 8 questions. Full per-evaluator results are in
+[docs/evaluation_results.md](docs/evaluation_results.md).
+
 ---
 
 ## Configuration
@@ -377,8 +404,20 @@ See [`.env.example`](.env.example) for all configuration options. The server run
 |----------|---------|-------------|
 | `OPENLENS_LOG_LEVEL` | `INFO` | Log level (DEBUG/INFO/WARNING/ERROR) |
 | `DATA_GOV_API_KEY` | *(empty)* | Optional Data.gov API key (improves rate limits) |
+| `CATALOG_CACHE_TTL_SECONDS` | `3600` | How long to cache catalog results (0 disables) |
 | `COVERAGE_HIGH_THRESHOLD` | `75` | Min score for "High" coverage rating |
 | `COVERAGE_PARTIAL_THRESHOLD` | `40` | Min score for "Partial" coverage rating |
+| `COVERAGE_LIMITED_THRESHOLD` | `15` | Min score for "Limited" coverage rating |
+
+---
+
+## Security
+
+- **Public data only, read-only.** The server reads public SSA dataset metadata (ssa.gov and Data.gov). It has no access to internal SSA systems, beneficiary records or PII, and performs no writes.
+- **No secrets required.** All endpoints are public; the optional Data.gov API key only raises rate limits.
+- **Validated input.** Every tool parameter declares its limits in the published schema (e.g. questions of 10–500 characters, dataset IDs restricted to a slug pattern), so bad input is rejected before tool code runs.
+- **No user-supplied URLs.** Outbound endpoints are fixed in `config.py`, and the Data.gov base URL is validated at start-up.
+- **Safe errors.** Unexpected exceptions are logged on the server and replaced with a generic message, so paths, URLs and stack traces never reach the client.
 
 ---
 
@@ -401,8 +440,8 @@ See [`.env.example`](.env.example) for all configuration options. The server run
 │   ├── config.py                    # Settings from environment variables
 │   ├── models.py                    # All Pydantic v2 models
 │   ├── utils.py                     # Shared utilities
-│   ├── routes.py                    # Alternate registration helper
 │   │
+│   ├── data/                        # Data.gov snapshot, catalog sources, gap evidence
 │   ├── tools/                       # 7 MCP tools
 │   ├── prompts/                     # 3 MCP prompts
 │   ├── resources/                   # 4 MCP resources
@@ -412,13 +451,29 @@ See [`.env.example`](.env.example) for all configuration options. The server run
 │       ├── dataset_analysis_service.py
 │       └── recommendation_service.py
 │
+├── scripts/
+│   ├── sync_catalog.py              # Refresh the Data.gov snapshot (--check to verify)
+│   └── check_gap_claims.py          # Re-run the searches behind every "no public data" claim
+│
 ├── tests/                           # Pytest unit tests
+├── mcp_tests/                       # MCP protocol tests over a real client session
 ├── eval/                            # Evaluation
-│   ├── engine_benchmark.py          # engine-only benchmark
+│   ├── engine_benchmark.py          # Engine-only benchmark
 │   ├── agent_eval/                  # Claude agent over MCP: dataset, agent, checks, judges, report
+│   ├── results/                     # Saved results and the HTML report
 │   └── benchmark_questions.yaml
+├── .github/workflows/               # CI (lint, types, tests) and weekly Data.gov catalog sync
 └── docs/                            # Documentation
 ```
+
+## Documentation
+
+| Document | Contents |
+|----------|----------|
+| [docs/architecture.md](docs/architecture.md) | Layers, design decisions and the Answer Coverage data flow |
+| [docs/answer_coverage.md](docs/answer_coverage.md) | How coverage is scored and rated |
+| [docs/datasets.md](docs/datasets.md) | How the catalog is grounded in Data.gov, and how to add a dataset |
+| [docs/evaluation_results.md](docs/evaluation_results.md) | Engine benchmark and agent evaluation results |
 
 ---
 
@@ -475,6 +530,17 @@ See [`.env.example`](.env.example) for all configuration options. The server run
 | Red Book: A Guide to Work Incentives | none (manually checked link) | — |
 
 Names, links, dates and frequencies come from each dataset's Data.gov record. See [docs/datasets.md](docs/datasets.md) for how to add a dataset.
+
+### Keeping the catalog current
+
+```bash
+python scripts/sync_catalog.py            # refresh the snapshot from Data.gov
+python scripts/sync_catalog.py --check    # exit 1 if the snapshot is out of date
+python scripts/check_gap_claims.py        # exit 1 if SSA has published data that may close a stated gap
+```
+
+A weekly GitHub Action refreshes the snapshot (opening a pull request when a Data.gov record
+changes) and re-runs the gap-claim searches.
 
 ---
 

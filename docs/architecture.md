@@ -14,7 +14,7 @@ and data source adapters.
 │                                                                     │
 │   7 Tools  │  3 Prompts  │  4 Resources  │  FastMCP (stdio)        │
 │                                                                     │
-│   app.py ─── routes.py                                             │
+│   app.py                                                            │
 └───────────────────────────────┬─────────────────────────────────────┘
                                 │
 ┌───────────────────────────────▼─────────────────────────────────────┐
@@ -62,7 +62,6 @@ src/ssa_disability_claims_openlens/
 ├── config.py       # Settings from environment variables (singleton)
 ├── models.py       # All Pydantic v2 models
 ├── utils.py        # Shared pure utilities (logging, scoring, keywords)
-├── routes.py       # Alternate registration helper for testing
 │
 ├── tools/
 │   ├── discover_disability_datasets.py
